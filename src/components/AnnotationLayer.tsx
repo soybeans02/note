@@ -91,6 +91,22 @@ export default function AnnotationLayer({
     setEditingId(null)
   }, [pageNum, tool])
 
+  // Apply toolbar style changes to selected/editing text box
+  const activeTextBoxId = editingId ?? selectedId
+  const prevStyleRef = useRef({ color, fontSize, bold })
+  useEffect(() => {
+    if (!activeTextBoxId || tool !== 'text') return
+    const prev = prevStyleRef.current
+    const updates: Partial<TextBox> = {}
+    if (color !== prev.color) updates.color = color
+    if (fontSize !== prev.fontSize) updates.fontSize = fontSize
+    if (bold !== prev.bold) updates.bold = bold
+    prevStyleRef.current = { color, fontSize, bold }
+    if (Object.keys(updates).length > 0) {
+      updateTextBox(docId, pageNum, activeTextBoxId, updates)
+    }
+  }, [color, fontSize, bold, activeTextBoxId, tool, docId, pageNum])
+
   // Render existing strokes
   useEffect(() => {
     const canvas = canvasRef.current
@@ -335,37 +351,74 @@ export default function AnnotationLayer({
 
         if (isEditing) {
           return (
-            <textarea
+            <div
               key={tb.id}
-              autoFocus
-              value={editingText}
-              onChange={(e) => setEditingText(e.target.value)}
-              onBlur={() => commitTextEdit(tb.id, editingText)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') commitTextEdit(tb.id, editingText)
-                e.stopPropagation()
-              }}
               style={{
                 position: 'absolute',
                 left,
                 top,
-                width: tbWidth,
-                fontSize: fs,
-                fontWeight: tb.bold ? 700 : 400,
-                color: tb.color,
-                minWidth: 60,
-                minHeight: fs + 8,
-                background: 'rgba(255,255,255,0.95)',
-                border: '1.5px solid #3b82f6',
-                borderRadius: 4,
-                padding: '2px 4px',
-                outline: 'none',
-                resize: 'both',
-                lineHeight: 1.4,
                 zIndex: 10,
-                fontFamily: 'sans-serif',
+                minWidth: 80,
               }}
-            />
+            >
+              {/* Drag handle */}
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  dragRef.current = {
+                    type: 'move',
+                    tbId: tb.id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: tb.x,
+                    origY: tb.y,
+                  }
+                }}
+                style={{
+                  height: 14,
+                  background: '#3b82f6',
+                  borderRadius: '4px 4px 0 0',
+                  cursor: 'move',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <svg width="20" height="4" viewBox="0 0 20 4" fill="rgba(255,255,255,0.6)">
+                  <circle cx="6" cy="2" r="1" />
+                  <circle cx="10" cy="2" r="1" />
+                  <circle cx="14" cy="2" r="1" />
+                </svg>
+              </div>
+              <textarea
+                autoFocus
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                onBlur={() => commitTextEdit(tb.id, editingText)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') commitTextEdit(tb.id, editingText)
+                  e.stopPropagation()
+                }}
+                style={{
+                  display: 'block',
+                  width: tbWidth ?? '100%',
+                  fontSize: fs,
+                  fontWeight: tb.bold ? 700 : 400,
+                  color: tb.color,
+                  minWidth: 80,
+                  minHeight: fs + 8,
+                  background: 'rgba(255,255,255,0.95)',
+                  border: '1.5px solid #3b82f6',
+                  borderTop: 'none',
+                  borderRadius: '0 0 4px 4px',
+                  padding: '2px 4px',
+                  outline: 'none',
+                  resize: 'both',
+                  lineHeight: 1.4,
+                  fontFamily: 'sans-serif',
+                }}
+              />
+            </div>
           )
         }
 

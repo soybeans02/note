@@ -28,11 +28,8 @@ const WIDTHS = [
   { value: 8, label: '太' },
 ]
 
-const FONT_SIZES = [
-  { value: 12, label: '小' },
-  { value: 16, label: '中' },
-  { value: 24, label: '大' },
-]
+const FONT_SIZE_MIN = 8
+const FONT_SIZE_MAX = 72
 
 const toolBtnClass = (active: boolean) =>
   `w-8 h-8 flex items-center justify-center rounded-lg transition ${
@@ -81,28 +78,30 @@ export default function DrawingToolbar({
         </svg>
       </button>
 
-      {/* Object eraser */}
+      {/* Object eraser — full stroke delete */}
       <button
         onClick={() => onToolChange('object-eraser')}
         className={toolBtnClass(tool === 'object-eraser')}
-        title="消しゴム（ストローク全体）"
+        title="消しゴム（ストローク全体を削除）"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 14h7" />
-          <path d="M3.5 10.5l6-6 3 3-6 6-3.5.5.5-3.5z" />
+          <rect x="2" y="5" width="12" height="7" rx="1.5" />
+          <path d="M2 9h12" />
+          <path d="M5 5V3.5h6V5" />
         </svg>
       </button>
 
-      {/* Trace eraser */}
+      {/* Trace eraser — partial erase */}
       <button
         onClick={() => onToolChange('trace-eraser')}
         className={toolBtnClass(tool === 'trace-eraser')}
-        title="なぞり消し（部分消し）"
+        title="なぞり消し（なぞった部分だけ消す）"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 14h7" />
-          <path d="M3.5 10.5l6-6 3 3-6 6-3.5.5.5-3.5z" />
-          <path d="M6.5 11.5l3-3" strokeDasharray="1.5 1.5" />
+          <rect x="2" y="5" width="12" height="7" rx="1.5" />
+          <path d="M2 9h12" />
+          <path d="M5 5V3.5h6V5" />
+          <path d="M5 7.5h6" strokeDasharray="2 2" strokeWidth="1.5" />
         </svg>
       </button>
 
@@ -146,20 +145,36 @@ export default function DrawingToolbar({
             </button>
           ))}
 
-          {/* Font sizes (text only) */}
-          {tool === 'text' && FONT_SIZES.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => onFontSizeChange(f.value)}
-              className={`h-6 px-2 rounded-md text-[10px] transition ${
-                fontSize === f.value
-                  ? 'bg-neutral-700 text-white'
-                  : 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+          {/* Font size px input (text only) */}
+          {tool === 'text' && (
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => onFontSizeChange(Math.max(FONT_SIZE_MIN, fontSize - 1))}
+                className="w-5 h-5 flex items-center justify-center rounded text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition text-[11px]"
+              >
+                −
+              </button>
+              <input
+                type="number"
+                value={fontSize}
+                min={FONT_SIZE_MIN}
+                max={FONT_SIZE_MAX}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value)
+                  if (!isNaN(v)) onFontSizeChange(Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, v)))
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="w-9 h-6 text-center text-[11px] bg-neutral-800 text-neutral-200 rounded border border-neutral-700 outline-none focus:border-neutral-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <span className="text-[9px] text-neutral-600 mr-0.5">px</span>
+              <button
+                onClick={() => onFontSizeChange(Math.min(FONT_SIZE_MAX, fontSize + 1))}
+                className="w-5 h-5 flex items-center justify-center rounded text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition text-[11px]"
+              >
+                +
+              </button>
+            </div>
+          )}
 
           {/* Bold toggle (text only) */}
           {tool === 'text' && (
