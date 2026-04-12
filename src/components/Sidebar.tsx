@@ -5,6 +5,7 @@ import {
   deleteFolder,
   moveFolder,
   renameFolder,
+  reorderFolder,
   useAllFolders,
 } from '../hooks/useFolders'
 import { moveDocument } from '../hooks/useDocuments'
@@ -31,7 +32,7 @@ function buildTree(folders: Folder[]): TreeNode[] {
     }
   }
   const sortRec = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+    nodes.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     nodes.forEach((n) => sortRec(n.children))
   }
   sortRec(roots)
@@ -110,6 +111,8 @@ function RootRow({ selected, onSelect }: { selected: boolean; onSelect: () => vo
   )
 }
 
+type DropZone = 'before' | 'into' | 'after'
+
 function FolderRow({
   node,
   depth,
@@ -124,8 +127,18 @@ function FolderRow({
   onSelect: (id: string | null) => void
 }) {
   const [open, setOpen] = useState(true)
-  const [hover, setHover] = useState(false)
+  const [zone, setZone] = useState<DropZone | null>(null)
   const selected = selectedFolderId === node.id
+
+  const computeZone = (e: React.DragEvent<HTMLDivElement>): DropZone => {
+    const isFolderDrag = e.dataTransfer.types.includes('application/x-folder-id')
+    if (!isFolderDrag) return 'into' // documents always go INTO this folder
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    if (y < rect.height * 0.25) return 'before'
+    if (y > rect.height * 0.75) return 'after'
+    return 'into'
+  }
 
   return (
     <div>
@@ -137,16 +150,25 @@ function FolderRow({
         }}
         onDragOver={(e) => {
           e.preventDefault()
-          setHover(true)
+          setZone(computeZone(e))
         }}
-        onDragLeave={() => setHover(false)}
+        onDragLeave={() => setZone(null)}
         onDrop={(e) => {
           e.preventDefault()
-          setHover(false)
+          const dropZone = computeZone(e)
+          setZone(null)
           const docId = e.dataTransfer.getData('application/x-doc-id')
-          if (docId) moveDocument(docId, node.id)
+          if (docId) {
+            moveDocument(docId, node.id)
+            return
+          }
           const folderId = e.dataTransfer.getData('application/x-folder-id')
-          if (folderId && folderId !== node.id) moveFolder(folderId, node.id)
+          if (!folderId || folderId === node.id) return
+          if (dropZone === 'into') {
+            moveFolder(folderId, node.id)
+          } else {
+            reorderFolder(folderId, node.id, dropZone)
+          }
         }}
         onClick={() => onSelect(node.id)}
         onContextMenu={(e) => {
@@ -172,10 +194,16 @@ function FolderRow({
           }
         }}
         style={{ paddingLeft: 12 + depth * 14 }}
-        className={`pr-3 py-1.5 text-sm cursor-pointer flex items-center gap-1.5 select-none ${
+        className={`relative pr-3 py-1.5 text-sm cursor-pointer flex items-center gap-1.5 select-none ${
           selected ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-        } ${hover ? 'ring-1 ring-sky-500' : ''}`}
+        } ${zone === 'into' ? 'ring-1 ring-sky-500' : ''}`}
       >
+        {zone === 'before' && (
+          <span className="absolute left-0 right-0 top-0 h-0.5 bg-sky-400 pointer-events-none" />
+        )}
+        {zone === 'after' && (
+          <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-sky-400 pointer-events-none" />
+        )}
         {node.children.length > 0 ? (
           <button
             onClick={(e) => {

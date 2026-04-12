@@ -31,7 +31,6 @@ export async function renameFolder(id: string, name: string) {
 
 export async function moveFolder(id: string, newParentId: string | null) {
   if (id === newParentId) return
-  // prevent moving into own descendant
   const all = await db.folders.toArray()
   const isDescendant = (candidateId: string | null): boolean => {
     let cur = candidateId
@@ -43,7 +42,68 @@ export async function moveFolder(id: string, newParentId: string | null) {
     return false
   }
   if (newParentId && isDescendant(newParentId)) return
-  await db.folders.update(id, { parentId: newParentId, updatedAt: Date.now() })
+  // Append at the end of the destination parent
+  const siblings = all.filter((f) => (f.parentId ?? null) === newParentId && f.id !== id)
+  const order = siblings.length
+    ? Math.max(...siblings.map((f) => f.order ?? 0)) + 1
+    : 0
+  await db.folders.update(id, { parentId: newParentId, order, updatedAt: Date.now() })
+}
+
+/**
+ * Reorder a folder relative to a reference folder at the SAME level.
+ * mode='before' → place dragged just before refId (same parent as refId)
+ * mode='after'  → place dragged just after  refId (same parent as refId)
+ */
+export async function reorderFolder(
+  draggedId: string,
+  refId: string,
+  mode: 'before' | 'after',
+) {
+  if (draggedId === refId) return
+  const all = await db.folders.toArray()
+  const dragged = all.find((f) => f.id === draggedId)
+  const ref = all.find((f) => f.id === refId)
+  if (!dragged || !ref) return
+
+  const targetParentId = ref.parentId ?? null
+
+  // cycle guard: don't put a folder under its own descendant
+  const isDescendant = (candidateId: string | null): boolean => {
+    let cur = candidateId
+    while (cur) {
+      if (cur === draggedId) return true
+      const parent = all.find((f) => f.id === cur)
+      cur = parent?.parentId ?? null
+    }
+    return false
+  }
+  if (targetParentId && isDescendant(targetParentId)) return
+
+  const siblings = all
+    .filter((f) => (f.parentId ?? null) === targetParentId && f.id !== draggedId)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+  const refIndex = siblings.findIndex((f) => f.id === refId)
+  if (refIndex < 0) return
+  const insertAt = mode === 'before' ? refIndex : refIndex + 1
+  siblings.splice(insertAt, 0, { ...dragged, parentId: targetParentId })
+
+  await db.transaction('rw', db.folders, async () => {
+    const now = Date.now()
+    for (let i = 0; i < siblings.length; i++) {
+      const f = siblings[i]
+      const patch: Partial<Folder> = {}
+      if ((f.order ?? -1) !== i) patch.order = i
+      if (f.id === draggedId && (dragged.parentId ?? null) !== targetParentId) {
+        patch.parentId = targetParentId
+        patch.updatedAt = now
+      }
+      if (Object.keys(patch).length) {
+        await db.folders.update(f.id, patch)
+      }
+    }
+  })
 }
 
 /** Recursively delete folder, its subfolders, and all contained documents/blobs. */
