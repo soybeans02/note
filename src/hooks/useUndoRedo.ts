@@ -41,13 +41,14 @@ export function useUndoRedo(docId: string, pageKey: string, annotation: Annotati
       return
     }
 
-    // Push previous state to undo stack (skip initial empty state)
-    if (prevSerializedRef.current !== '') {
-      undoStackRef.current.push(JSON.parse(prevSerializedRef.current))
-      redoStackRef.current = []
-      setUndoLen(undoStackRef.current.length)
-      setRedoLen(0)
-    }
+    // Push previous state to undo stack
+    const prevSnapshot: Snapshot = prevSerializedRef.current
+      ? JSON.parse(prevSerializedRef.current)
+      : { strokes: [], textBoxes: [] }
+    undoStackRef.current.push(prevSnapshot)
+    redoStackRef.current = []
+    setUndoLen(undoStackRef.current.length)
+    setRedoLen(0)
     prevSerializedRef.current = current
   }, [annotation])
 

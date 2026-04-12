@@ -34,6 +34,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const pdfInsertInputRef = useRef<HTMLInputElement>(null)
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const noteContentRef = useRef<Map<string, string>>(new Map())
@@ -213,6 +214,51 @@ export default function PdfViewer({ doc, onClose }: Props) {
     }, 50)
   }, [currentAfterPage, doc.id, pdfPages, notePages, imagePages])
 
+  // Insert PDF pages as images after current page
+  const handleInsertPdf = useCallback(async (file: File) => {
+    const blob = new Blob([await file.arrayBuffer()], { type: file.type })
+    const insertedPdf = await loadPdfFromBlob(blob)
+    let firstIpId = ''
+    const newImagePages: typeof imagePages = []
+    for (let i = 1; i <= insertedPdf.numPages; i++) {
+      const pg = await insertedPdf.getPage(i)
+      const scale = 2
+      const vp = pg.getViewport({ scale })
+      const canvas = document.createElement('canvas')
+      canvas.width = vp.width
+      canvas.height = vp.height
+      const ctx = canvas.getContext('2d')!
+      await pg.render({ canvasContext: ctx, viewport: vp }).promise
+      const imgBlob = await new Promise<Blob>((res) =>
+        canvas.toBlob((b) => res(b!), 'image/png'),
+      )
+      const ipId = await addImagePage(doc.id, currentAfterPage, imgBlob)
+      if (!firstIpId) firstIpId = ipId
+      newImagePages.push({
+        id: ipId,
+        documentId: doc.id,
+        afterPage: currentAfterPage,
+        blob: imgBlob,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+    }
+    insertedPdf.destroy()
+    if (firstIpId) {
+      setTimeout(() => {
+        const updated = buildPageSequence(
+          pdfPages,
+          notePages,
+          [...imagePages, ...newImagePages],
+        )
+        const idx = updated.findIndex(
+          (e) => e.type === 'image' && e.imagePageId === firstIpId,
+        )
+        if (idx >= 0) setPage(idx + 1)
+      }, 50)
+    }
+  }, [currentAfterPage, doc.id, pdfPages, notePages, imagePages])
+
   // Delete current note/image page
   const handleDeletePage = useCallback(() => {
     if (isNotePage && currentEntry) {
@@ -343,6 +389,32 @@ export default function PdfViewer({ doc, onClose }: Props) {
           onChange={(e) => {
             const file = e.target.files?.[0]
             if (file) handleInsertImage(file)
+            e.target.value = ''
+          }}
+        />
+
+        {/* Insert PDF pages */}
+        <Tooltip label="PDF挿入" position="bottom">
+          <button
+            onClick={() => pdfInsertInputRef.current?.click()}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+              <path d="M4 2h4l4 4v7a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" />
+              <path d="M8 2v4h4" />
+              <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
+            </svg>
+          </button>
+        </Tooltip>
+        <input
+          ref={pdfInsertInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) handleInsertPdf(file)
             e.target.value = ''
           }}
         />
