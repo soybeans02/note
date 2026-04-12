@@ -133,10 +133,23 @@ export async function renameDocument(id: string, name: string) {
 }
 
 export async function deleteDocument(id: string) {
-  await db.transaction('rw', db.documents, db.blobs, async () => {
-    await db.documents.delete(id)
-    await db.blobs.delete(id)
-  })
+  await db.transaction(
+    'rw',
+    [db.documents, db.blobs, db.annotations, db.notePages],
+    async () => {
+      await db.documents.delete(id)
+      await db.blobs.delete(id)
+      // Cascade delete annotations
+      const annKeys = await db.annotations.where('docId').equals(id).primaryKeys()
+      await db.annotations.bulkDelete(annKeys)
+      // Cascade delete note pages
+      const npKeys = await db.notePages
+        .where('documentId')
+        .equals(id)
+        .primaryKeys()
+      await db.notePages.bulkDelete(npKeys)
+    },
+  )
 }
 
 export async function getDocumentBlob(id: string): Promise<Blob | undefined> {

@@ -27,10 +27,36 @@ export interface DocumentBlob {
   blob: Blob
 }
 
+export interface Stroke {
+  id: string
+  points: [number, number, number][] // [x, y, pressure] 0-1 normalized
+  color: string
+  width: number
+}
+
+export interface Annotation {
+  id: string // `${docId}-${pageNum}`
+  docId: string
+  pageNum: number
+  strokes: Stroke[]
+  updatedAt: number
+}
+
+export interface NotePage {
+  id: string
+  documentId: string
+  afterPage: number // 0=before first, N=after PDF page N
+  content: string
+  createdAt: number
+  updatedAt: number
+}
+
 class NoteDB extends Dexie {
   folders!: Table<Folder, string>
   documents!: Table<DocumentMeta, string>
   blobs!: Table<DocumentBlob, string>
+  annotations!: Table<Annotation, string>
+  notePages!: Table<NotePage, string>
 
   constructor() {
     super('note-db')
@@ -81,6 +107,36 @@ class NoteDB extends Dexie {
           .modify((doc: any) => {
             if (doc.notes === undefined) doc.notes = ''
           })
+      })
+    this.version(4)
+      .stores({
+        folders: 'id, parentId, name, order, updatedAt',
+        documents: 'id, folderId, name, order, updatedAt',
+        blobs: 'id',
+        annotations: 'id, docId, pageNum',
+        notePages: 'id, documentId, afterPage',
+      })
+      .upgrade(async (tx) => {
+        // Migrate existing DocumentMeta.notes → notePages table
+        const docs = await tx.table('documents').toArray()
+        for (const doc of docs) {
+          if (doc.notes && doc.notes.trim()) {
+            const id =
+              crypto.randomUUID?.() ??
+              Math.random().toString(36).slice(2) + Date.now().toString(36)
+            const now = Date.now()
+            await tx.table('notePages').add({
+              id,
+              documentId: doc.id,
+              afterPage: doc.pageCount || 0,
+              content: doc.notes,
+              createdAt: now,
+              updatedAt: now,
+            })
+            // Clear the old notes field but keep it for compatibility
+            await tx.table('documents').update(doc.id, { notes: '' })
+          }
+        }
       })
   }
 }
