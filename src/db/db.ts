@@ -17,6 +17,7 @@ export interface DocumentMeta {
   pageCount: number
   thumbDataUrl: string
   order: number
+  notes: string
   createdAt: number
   updatedAt: number
 }
@@ -66,6 +67,20 @@ class NoteDB extends Dexie {
         }
         await assignOrders('documents', 'folderId')
         await assignOrders('folders', 'parentId')
+      })
+    this.version(3)
+      .stores({
+        folders: 'id, parentId, name, order, updatedAt',
+        documents: 'id, folderId, name, order, updatedAt',
+        blobs: 'id',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('documents')
+          .toCollection()
+          .modify((doc: any) => {
+            if (doc.notes === undefined) doc.notes = ''
+          })
       })
   }
 }

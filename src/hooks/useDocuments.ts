@@ -52,6 +52,7 @@ export async function addPdfFiles(files: File[], folderId: string | null) {
           pageCount: meta.pageCount,
           thumbDataUrl: meta.thumbDataUrl,
           order,
+          notes: '',
           createdAt: now,
           updatedAt: now,
         })
@@ -66,6 +67,10 @@ export async function addPdfFiles(files: File[], folderId: string | null) {
 export async function moveDocument(id: string, folderId: string | null) {
   const order = await nextOrderInFolder(folderId)
   await db.documents.update(id, { folderId, order, updatedAt: Date.now() })
+}
+
+export async function saveNotes(id: string, notes: string) {
+  await db.documents.update(id, { notes })
 }
 
 /**

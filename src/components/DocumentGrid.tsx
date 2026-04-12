@@ -134,8 +134,9 @@ function Card({
           <div className="text-sm text-slate-100 truncate" title={doc.name}>
             {doc.name}
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            {doc.pageCount}p · {(doc.size / 1024 / 1024).toFixed(1)}MB
+          <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
+            <span>{doc.pageCount}p · {(doc.size / 1024 / 1024).toFixed(1)}MB</span>
+            {doc.notes && <span title="メモあり">📝</span>}
           </div>
         </div>
       </div>
