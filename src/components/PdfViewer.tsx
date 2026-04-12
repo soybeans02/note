@@ -10,6 +10,7 @@ import { useUndoRedo } from '../hooks/useUndoRedo'
 import AnnotationLayer from './AnnotationLayer'
 import DrawingToolbar, { type DrawTool } from './DrawingToolbar'
 import Tooltip from './Tooltip'
+import { exportPdfWithAnnotations } from '../lib/exportPdf'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
 interface Props {
@@ -28,6 +29,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const [textFontSize, setTextFontSize] = useState(16)
   const [textBold, setTextBold] = useState(false)
   const [canvasDims, setCanvasDims] = useState({ w: 0, h: 0 })
+  const [exporting, setExporting] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -449,6 +451,38 @@ export default function PdfViewer({ doc, onClose }: Props) {
             </svg>
           </button>
         </Tooltip>
+
+        {/* Export PDF */}
+        {pdf && (
+          <>
+            <div className="w-px h-4 bg-neutral-800 mx-0.5" />
+            <Tooltip label="PDF書き出し" position="bottom">
+              <button
+                onClick={async () => {
+                  if (exporting) return
+                  setExporting(true)
+                  try {
+                    await exportPdfWithAnnotations(pdf, doc.id, doc.name)
+                  } finally {
+                    setExporting(false)
+                  }
+                }}
+                disabled={exporting}
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
+                  exporting
+                    ? 'text-neutral-700 cursor-default'
+                    : 'hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 2v7.5" />
+                  <path d="M4 7l3 3 3-3" />
+                  <path d="M2 11.5h10" />
+                </svg>
+              </button>
+            </Tooltip>
+          </>
+        )}
       </div>
 
       {/* Content area */}
