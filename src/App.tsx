@@ -29,7 +29,7 @@ export default function App() {
       />
       <div className="flex-1 flex flex-col min-w-0">
         <Toolbar search={search} onSearch={setSearch} folderLabel={folderLabel} />
-        <UploadDropZone folderId={selectedFolderId}>
+        <UploadDropZone folderId={selectedFolderId} onOpenDoc={setOpenDoc}>
           <DocumentGrid documents={documents} folders={folders} onOpen={setOpenDoc} />
         </UploadDropZone>
       </div>

@@ -73,6 +73,25 @@ export async function saveNotes(id: string, notes: string) {
   await db.documents.update(id, { notes })
 }
 
+export async function createBlankNote(folderId: string | null): Promise<string> {
+  const id = uid()
+  const now = Date.now()
+  const order = await nextOrderInFolder(folderId)
+  await db.documents.add({
+    id,
+    folderId,
+    name: '新しいノート',
+    size: 0,
+    pageCount: 0,
+    thumbDataUrl: '',
+    order,
+    notes: '',
+    createdAt: now,
+    updatedAt: now,
+  })
+  return id
+}
+
 /**
  * Reorder a document within its current folder.
  * `beforeId` = id of the doc that the dragged one should land in front of,
