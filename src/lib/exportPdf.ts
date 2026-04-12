@@ -34,7 +34,7 @@ async function renderPageToImage(
 
   await page.render({ canvasContext: ctx, viewport }).promise
 
-  const annotation = await db.annotations.get(`${docId}-${pageNum}`)
+  const annotation = await db.annotations.get(`${docId}-${String(pageNum)}`)
   if (annotation) {
     // Strokes
     for (const stroke of annotation.strokes) {

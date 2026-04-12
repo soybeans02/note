@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type DocumentMeta } from '../db/db'
+import { type DocumentMeta, type Stroke, type TextBox } from '../db/db'
 import { getDocumentBlob } from '../hooks/useDocuments'
 import { loadPdfFromBlob } from '../lib/pdf'
 import { buildPageSequence, type PageEntry } from '../lib/pageSequence'
@@ -53,12 +53,17 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const isNotePage = currentEntry?.type === 'note'
   const isImagePage = currentEntry?.type === 'image'
   const currentPdfPageNum = isPdfPage ? currentEntry.pdfPageNum : 0
+  const annotationPageKey = isPdfPage
+    ? String(currentPdfPageNum)
+    : isImagePage
+      ? `img-${currentEntry.imagePageId}`
+      : ''
 
-  // Annotation for current PDF page
-  const annotation = useAnnotation(doc.id, currentPdfPageNum)
+  // Annotation for current page
+  const annotation = useAnnotation(doc.id, annotationPageKey)
   const strokes = annotation?.strokes ?? []
   const textBoxes = annotation?.textBoxes ?? []
-  const { undo, redo, canUndo, canRedo } = useUndoRedo(doc.id, currentPdfPageNum, annotation)
+  const { undo, redo, canUndo, canRedo } = useUndoRedo(doc.id, annotationPageKey, annotation)
 
   // Load PDF
   useEffect(() => {
@@ -359,8 +364,8 @@ export default function PdfViewer({ doc, onClose }: Props) {
           </Tooltip>
         )}
 
-        {/* Undo / Redo (only on PDF pages) */}
-        {isPdfPage && (
+        {/* Undo / Redo */}
+        {(isPdfPage || isImagePage) && (
           <>
             <Tooltip label="元に戻す (⌘Z)" position="bottom">
               <button
@@ -397,8 +402,8 @@ export default function PdfViewer({ doc, onClose }: Props) {
           </>
         )}
 
-        {/* Draw mode toggle (only on PDF pages) */}
-        {isPdfPage && (
+        {/* Draw mode toggle */}
+        {(isPdfPage || isImagePage) && (
           <Tooltip label="ペンモード" position="bottom">
             <button
               onClick={() => setDrawMode((v) => !v)}
@@ -490,14 +495,26 @@ export default function PdfViewer({ doc, onClose }: Props) {
             onChange={handleNotesChange}
           />
         ) : isImagePage ? (
-          <ImagePageView blob={currentEntry.blob} />
+          <ImagePageView
+            blob={currentEntry.blob}
+            docId={doc.id}
+            pageKey={annotationPageKey}
+            strokes={strokes}
+            textBoxes={textBoxes}
+            drawMode={drawMode}
+            drawTool={drawTool}
+            drawColor={drawColor}
+            drawWidth={drawWidth}
+            textFontSize={textFontSize}
+            textBold={textBold}
+          />
         ) : isPdfPage ? (
           <div className="relative inline-block">
             <canvas ref={canvasRef} className="shadow-2xl bg-white" />
             {canvasDims.w > 0 && (
               <AnnotationLayer
                 docId={doc.id}
-                pageNum={currentPdfPageNum}
+                pageKey={annotationPageKey}
                 strokes={strokes}
                 textBoxes={textBoxes}
                 interactive={drawMode}
@@ -527,7 +544,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
       </div>
 
       {/* Drawing toolbar */}
-      {drawMode && isPdfPage && (
+      {drawMode && (isPdfPage || isImagePage) && (
         <DrawingToolbar
           tool={drawTool}
           color={drawColor}
@@ -593,8 +610,34 @@ function NotePageView({
   )
 }
 
-function ImagePageView({ blob }: { blob: Blob }) {
+function ImagePageView({
+  blob,
+  docId,
+  pageKey,
+  strokes,
+  textBoxes,
+  drawMode,
+  drawTool,
+  drawColor,
+  drawWidth,
+  textFontSize,
+  textBold,
+}: {
+  blob: Blob
+  docId: string
+  pageKey: string
+  strokes: Stroke[]
+  textBoxes: TextBox[]
+  drawMode: boolean
+  drawTool: DrawTool
+  drawColor: string
+  drawWidth: number
+  textFontSize: number
+  textBold: boolean
+}) {
   const [url, setUrl] = useState('')
+  const [dims, setDims] = useState({ w: 0, h: 0 })
+  const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
     const objUrl = URL.createObjectURL(blob)
@@ -602,13 +645,39 @@ function ImagePageView({ blob }: { blob: Blob }) {
     return () => URL.revokeObjectURL(objUrl)
   }, [blob])
 
+  const handleLoad = useCallback(() => {
+    if (imgRef.current) {
+      setDims({ w: imgRef.current.clientWidth, h: imgRef.current.clientHeight })
+    }
+  }, [])
+
   if (!url) return null
 
   return (
-    <img
-      src={url}
-      alt="挿入画像"
-      className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-lg"
-    />
+    <div className="relative inline-block">
+      <img
+        ref={imgRef}
+        src={url}
+        alt="挿入画像"
+        className="max-w-full max-h-[85vh] object-contain shadow-2xl rounded-lg"
+        onLoad={handleLoad}
+      />
+      {dims.w > 0 && (
+        <AnnotationLayer
+          docId={docId}
+          pageKey={pageKey}
+          strokes={strokes}
+          textBoxes={textBoxes}
+          interactive={drawMode}
+          tool={drawTool}
+          color={drawColor}
+          width={drawWidth}
+          fontSize={textFontSize}
+          bold={textBold}
+          canvasWidth={dims.w}
+          canvasHeight={dims.h}
+        />
+      )}
+    </div>
   )
 }

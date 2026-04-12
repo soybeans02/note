@@ -1,15 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, type Annotation, type Stroke, type TextBox } from '../db/db'
 
-export function useAnnotation(docId: string, pageNum: number): Annotation | undefined {
+export function useAnnotation(docId: string, pageKey: string): Annotation | undefined {
   return useLiveQuery(
-    () => db.annotations.get(`${docId}-${pageNum}`),
-    [docId, pageNum],
+    () => db.annotations.get(`${docId}-${pageKey}`),
+    [docId, pageKey],
   )
 }
 
-export async function saveStrokes(docId: string, pageNum: number, strokes: Stroke[]) {
-  const id = `${docId}-${pageNum}`
+export async function saveStrokes(docId: string, pageKey: string, strokes: Stroke[]) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (existing) {
     await db.annotations.update(id, { strokes, updatedAt: Date.now() })
@@ -17,37 +17,37 @@ export async function saveStrokes(docId: string, pageNum: number, strokes: Strok
     await db.annotations.add({
       id,
       docId,
-      pageNum,
+      pageNum: 0,
       strokes,
       updatedAt: Date.now(),
     })
   }
 }
 
-export async function addStroke(docId: string, pageNum: number, stroke: Stroke) {
-  const id = `${docId}-${pageNum}`
+export async function addStroke(docId: string, pageKey: string, stroke: Stroke) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   const strokes = existing ? [...existing.strokes, stroke] : [stroke]
-  await saveStrokes(docId, pageNum, strokes)
+  await saveStrokes(docId, pageKey, strokes)
 }
 
-export async function removeStroke(docId: string, pageNum: number, strokeId: string) {
-  const id = `${docId}-${pageNum}`
+export async function removeStroke(docId: string, pageKey: string, strokeId: string) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (!existing) return
   const strokes = existing.strokes.filter((s) => s.id !== strokeId)
-  await saveStrokes(docId, pageNum, strokes)
+  await saveStrokes(docId, pageKey, strokes)
 }
 
 /** Trace-erase: remove points near (nx, ny) and split strokes */
 export async function traceEraseAt(
   docId: string,
-  pageNum: number,
+  pageKey: string,
   nx: number,
   ny: number,
   threshold = 0.03,
 ) {
-  const id = `${docId}-${pageNum}`
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (!existing) return
 
@@ -78,11 +78,11 @@ export async function traceEraseAt(
       })
     }
   }
-  await saveStrokes(docId, pageNum, newStrokes)
+  await saveStrokes(docId, pageKey, newStrokes)
 }
 
-export async function addTextBox(docId: string, pageNum: number, textBox: TextBox) {
-  const id = `${docId}-${pageNum}`
+export async function addTextBox(docId: string, pageKey: string, textBox: TextBox) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   const textBoxes = existing?.textBoxes ? [...existing.textBoxes, textBox] : [textBox]
   if (existing) {
@@ -91,7 +91,7 @@ export async function addTextBox(docId: string, pageNum: number, textBox: TextBo
     await db.annotations.add({
       id,
       docId,
-      pageNum,
+      pageNum: 0,
       strokes: [],
       textBoxes,
       updatedAt: Date.now(),
@@ -99,8 +99,8 @@ export async function addTextBox(docId: string, pageNum: number, textBox: TextBo
   }
 }
 
-export async function updateTextBox(docId: string, pageNum: number, textBoxId: string, updates: Partial<TextBox>) {
-  const id = `${docId}-${pageNum}`
+export async function updateTextBox(docId: string, pageKey: string, textBoxId: string, updates: Partial<TextBox>) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (!existing?.textBoxes) return
   const textBoxes = existing.textBoxes.map((tb) =>
@@ -109,8 +109,8 @@ export async function updateTextBox(docId: string, pageNum: number, textBoxId: s
   await db.annotations.update(id, { textBoxes, updatedAt: Date.now() })
 }
 
-export async function removeTextBox(docId: string, pageNum: number, textBoxId: string) {
-  const id = `${docId}-${pageNum}`
+export async function removeTextBox(docId: string, pageKey: string, textBoxId: string) {
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (!existing?.textBoxes) return
   const textBoxes = existing.textBoxes.filter((tb) => tb.id !== textBoxId)
@@ -119,11 +119,11 @@ export async function removeTextBox(docId: string, pageNum: number, textBoxId: s
 
 export async function restoreAnnotation(
   docId: string,
-  pageNum: number,
+  pageKey: string,
   strokes: Stroke[],
   textBoxes: TextBox[],
 ) {
-  const id = `${docId}-${pageNum}`
+  const id = `${docId}-${pageKey}`
   const existing = await db.annotations.get(id)
   if (existing) {
     await db.annotations.update(id, { strokes, textBoxes, updatedAt: Date.now() })
@@ -131,7 +131,7 @@ export async function restoreAnnotation(
     await db.annotations.add({
       id,
       docId,
-      pageNum,
+      pageNum: 0,
       strokes,
       textBoxes,
       updatedAt: Date.now(),

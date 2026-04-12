@@ -12,7 +12,7 @@ function serialize(ann: Annotation | undefined): string {
   return JSON.stringify({ strokes: ann.strokes, textBoxes: ann.textBoxes ?? [] })
 }
 
-export function useUndoRedo(docId: string, pageNum: number, annotation: Annotation | undefined) {
+export function useUndoRedo(docId: string, pageKey: string, annotation: Annotation | undefined) {
   const undoStackRef = useRef<Snapshot[]>([])
   const redoStackRef = useRef<Snapshot[]>([])
   const isRestoringRef = useRef(false)
@@ -28,7 +28,7 @@ export function useUndoRedo(docId: string, pageNum: number, annotation: Annotati
     isRestoringRef.current = false
     setUndoLen(0)
     setRedoLen(0)
-  }, [docId, pageNum])
+  }, [docId, pageKey])
 
   // Track changes
   useEffect(() => {
@@ -61,8 +61,8 @@ export function useUndoRedo(docId: string, pageNum: number, annotation: Annotati
     isRestoringRef.current = true
     setUndoLen(undoStackRef.current.length)
     setRedoLen(redoStackRef.current.length)
-    await restoreAnnotation(docId, pageNum, prev.strokes, prev.textBoxes)
-  }, [docId, pageNum])
+    await restoreAnnotation(docId, pageKey, prev.strokes, prev.textBoxes)
+  }, [docId, pageKey])
 
   const redo = useCallback(async () => {
     if (!redoStackRef.current.length) return
@@ -73,8 +73,8 @@ export function useUndoRedo(docId: string, pageNum: number, annotation: Annotati
     isRestoringRef.current = true
     setUndoLen(undoStackRef.current.length)
     setRedoLen(redoStackRef.current.length)
-    await restoreAnnotation(docId, pageNum, next.strokes, next.textBoxes)
-  }, [docId, pageNum])
+    await restoreAnnotation(docId, pageKey, next.strokes, next.textBoxes)
+  }, [docId, pageKey])
 
   return { undo, redo, canUndo: undoLen > 0, canRedo: redoLen > 0 }
 }

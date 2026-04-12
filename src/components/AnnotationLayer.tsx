@@ -6,7 +6,7 @@ import type { DrawTool } from './DrawingToolbar'
 
 interface Props {
   docId: string
-  pageNum: number
+  pageKey: string
   strokes: Stroke[]
   textBoxes: TextBox[]
   interactive: boolean
@@ -69,7 +69,7 @@ type DragState = {
 
 export default function AnnotationLayer({
   docId,
-  pageNum,
+  pageKey,
   strokes,
   textBoxes,
   interactive,
@@ -92,7 +92,7 @@ export default function AnnotationLayer({
   // Clear editing when tool/page changes
   useEffect(() => {
     setEditingId(null)
-  }, [pageNum, tool])
+  }, [pageKey, tool])
 
   // Apply toolbar style changes to editing text box
   const activeTextBoxId = editingId
@@ -106,9 +106,9 @@ export default function AnnotationLayer({
     if (bold !== prev.bold) updates.bold = bold
     prevStyleRef.current = { color, fontSize, bold }
     if (Object.keys(updates).length > 0) {
-      updateTextBox(docId, pageNum, activeTextBoxId, updates)
+      updateTextBox(docId, pageKey, activeTextBoxId, updates)
     }
-  }, [color, fontSize, bold, activeTextBoxId, tool, docId, pageNum])
+  }, [color, fontSize, bold, activeTextBoxId, tool, docId, pageKey])
 
   // Render existing strokes
   useEffect(() => {
@@ -158,19 +158,19 @@ export default function AnnotationLayer({
 
       if (tool === 'object-eraser') {
         const hit = findStrokeAt(pt[0], pt[1])
-        if (hit) removeStroke(docId, pageNum, hit.id)
+        if (hit) removeStroke(docId, pageKey, hit.id)
         return
       }
 
       if (tool === 'trace-eraser') {
-        traceEraseAt(docId, pageNum, pt[0], pt[1])
+        traceEraseAt(docId, pageKey, pt[0], pt[1])
         return
       }
 
       drawingRef.current = true
       pointsRef.current = [pt]
     },
-    [interactive, tool, docId, pageNum, normalizePoint, findStrokeAt],
+    [interactive, tool, docId, pageKey, normalizePoint, findStrokeAt],
   )
 
   const handlePointerMove = useCallback(
@@ -181,7 +181,7 @@ export default function AnnotationLayer({
         if (e.buttons > 0) {
           const pt = normalizePoint(e)
           const hit = findStrokeAt(pt[0], pt[1])
-          if (hit) removeStroke(docId, pageNum, hit.id)
+          if (hit) removeStroke(docId, pageKey, hit.id)
         }
         return
       }
@@ -189,7 +189,7 @@ export default function AnnotationLayer({
       if (tool === 'trace-eraser') {
         if (e.buttons > 0) {
           const pt = normalizePoint(e)
-          traceEraseAt(docId, pageNum, pt[0], pt[1])
+          traceEraseAt(docId, pageKey, pt[0], pt[1])
         }
         return
       }
@@ -220,7 +220,7 @@ export default function AnnotationLayer({
       ctx.fillStyle = color
       ctx.fill(path)
     },
-    [interactive, tool, docId, pageNum, normalizePoint, findStrokeAt, strokes, color, width],
+    [interactive, tool, docId, pageKey, normalizePoint, findStrokeAt, strokes, color, width],
   )
 
   const handlePointerUp = useCallback(() => {
@@ -234,21 +234,21 @@ export default function AnnotationLayer({
       width,
     }
     pointsRef.current = []
-    addStroke(docId, pageNum, stroke)
-  }, [docId, pageNum, color, width])
+    addStroke(docId, pageKey, stroke)
+  }, [docId, pageKey, color, width])
 
   // Commit text edit
   const commitTextEdit = useCallback(
     (tbId: string, text: string) => {
       if (text.trim() === '') {
-        removeTextBox(docId, pageNum, tbId)
+        removeTextBox(docId, pageKey, tbId)
       } else {
-        updateTextBox(docId, pageNum, tbId, { text })
+        updateTextBox(docId, pageKey, tbId, { text })
       }
       setEditingId(null)
       setEditingText('')
     },
-    [docId, pageNum],
+    [docId, pageKey],
   )
 
   // Text tool: click to create new text box (or dismiss edit)
@@ -267,11 +267,11 @@ export default function AnnotationLayer({
       const ny = (e.clientY - rect.top) / rect.height
       const id = uid()
       const tb: TextBox = { id, x: nx, y: ny, text: '', color, fontSize, bold }
-      addTextBox(docId, pageNum, tb)
+      addTextBox(docId, pageKey, tb)
       setEditingId(id)
       setEditingText('')
     },
-    [interactive, tool, color, fontSize, bold, docId, pageNum, editingId, editingText, commitTextEdit],
+    [interactive, tool, color, fontSize, bold, docId, pageKey, editingId, editingText, commitTextEdit],
   )
 
   // Click on background to commit edit
@@ -292,7 +292,7 @@ export default function AnnotationLayer({
 
       const newX = Math.max(0, Math.min(1, drag.origX + dx))
       const newY = Math.max(0, Math.min(1, drag.origY + dy))
-      updateTextBox(docId, pageNum, drag.tbId, { x: newX, y: newY })
+      updateTextBox(docId, pageKey, drag.tbId, { x: newX, y: newY })
     }
 
     const onMouseUp = () => {
@@ -305,7 +305,7 @@ export default function AnnotationLayer({
       window.removeEventListener('mousemove', onMouseMove)
       window.removeEventListener('mouseup', onMouseUp)
     }
-  }, [docId, pageNum, canvasWidth, canvasHeight])
+  }, [docId, pageKey, canvasWidth, canvasHeight])
 
   const dpr = window.devicePixelRatio || 1
   const isTextTool = tool === 'text'
@@ -434,7 +434,7 @@ export default function AnnotationLayer({
               e.stopPropagation()
 
               if (tool === 'object-eraser') {
-                removeTextBox(docId, pageNum, tb.id)
+                removeTextBox(docId, pageKey, tb.id)
                 return
               }
 
