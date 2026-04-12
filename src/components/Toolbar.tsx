@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../db/db'
 import { downloadBlob, exportAll, importAll } from '../lib/backup'
 
 interface Props {
@@ -7,23 +8,23 @@ interface Props {
   folderLabel: string
 }
 
-export default function Toolbar({ search, onSearch, folderLabel }: Props) {
-  const [usage, setUsage] = useState<string>('')
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)}GB`
+}
 
-  useEffect(() => {
-    const refresh = async () => {
-      if (!navigator.storage?.estimate) return
-      const e = await navigator.storage.estimate()
-      if (e.usage != null && e.quota != null) {
-        const mb = (e.usage / 1024 / 1024).toFixed(0)
-        const pct = ((e.usage / e.quota) * 100).toFixed(1)
-        setUsage(`${mb}MB (${pct}%)`)
-      }
-    }
-    refresh()
-    const id = setInterval(refresh, 5000)
-    return () => clearInterval(id)
-  }, [])
+export default function Toolbar({ search, onSearch, folderLabel }: Props) {
+  const stats = useLiveQuery(
+    async () => {
+      const docs = await db.documents.toArray()
+      const total = docs.reduce((sum, d) => sum + (d.size ?? 0), 0)
+      return { count: docs.length, total }
+    },
+    [],
+    { count: 0, total: 0 },
+  )
 
   return (
     <div className="h-12 px-5 border-b border-slate-800 bg-slate-900/40 flex items-center gap-3 text-sm whitespace-nowrap">
@@ -35,7 +36,11 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
         className="flex-1 min-w-0 max-w-md bg-slate-800/70 border border-slate-700 focus:border-sky-500 focus:outline-none rounded px-3 py-1.5 text-slate-100 placeholder:text-slate-500"
       />
       <div className="flex-1" />
-      {usage && <div className="text-[11px] text-slate-500 shrink-0">使用量 {usage}</div>}
+      {stats.count > 0 && (
+        <div className="text-[11px] text-slate-500 shrink-0">
+          {stats.count}件 · {formatBytes(stats.total)}
+        </div>
+      )}
       <button
         onClick={async () => {
           const blob = await exportAll()
