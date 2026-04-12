@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import getStroke from 'perfect-freehand'
-import { uid, type Stroke } from '../db/db'
-import { addStroke, removeStroke, traceEraseAt } from '../hooks/useAnnotations'
+import { uid, type Stroke, type TextBox } from '../db/db'
+import { addStroke, removeStroke, traceEraseAt, addTextBox, updateTextBox, removeTextBox } from '../hooks/useAnnotations'
 import type { DrawTool } from './DrawingToolbar'
 
 interface Props {
   docId: string
   pageNum: number
   strokes: Stroke[]
+  textBoxes: TextBox[]
   interactive: boolean
   tool: DrawTool
   color: string
   width: number
+  fontSize: number
+  bold: boolean
   canvasWidth: number
   canvasHeight: number
 }
@@ -55,20 +58,38 @@ function renderStrokes(
   }
 }
 
+type DragState =
+  | { type: 'move'; tbId: string; startX: number; startY: number; origX: number; origY: number }
+  | { type: 'resize'; tbId: string; startX: number; startY: number; origW: number }
+
 export default function AnnotationLayer({
   docId,
   pageNum,
   strokes,
+  textBoxes,
   interactive,
   tool,
   color,
   width,
+  fontSize,
+  bold,
   canvasWidth,
   canvasHeight,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const drawingRef = useRef(false)
   const pointsRef = useRef<[number, number, number][]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const dragRef = useRef<DragState | null>(null)
+
+  // Clear selection when tool/page changes
+  useEffect(() => {
+    setSelectedId(null)
+    setEditingId(null)
+  }, [pageNum, tool])
 
   // Render existing strokes
   useEffect(() => {
@@ -111,6 +132,7 @@ export default function AnnotationLayer({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!interactive) return
+      if (tool === 'text') return
       e.preventDefault()
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
       const pt = normalizePoint(e)
@@ -158,7 +180,6 @@ export default function AnnotationLayer({
       const pt = normalizePoint(e)
       pointsRef.current.push(pt)
 
-      // Live preview
       const canvas = canvasRef.current
       if (!canvas) return
       const ctx = canvas.getContext('2d')
@@ -166,7 +187,6 @@ export default function AnnotationLayer({
       const w = canvas.width
       const h = canvas.height
       renderStrokes(ctx, strokes, w, h)
-      // Draw current stroke
       const scaledPoints = pointsRef.current.map(
         ([x, y, p]) => [x * w, y * h, p] as [number, number, number],
       )
@@ -198,14 +218,81 @@ export default function AnnotationLayer({
     addStroke(docId, pageNum, stroke)
   }, [docId, pageNum, color, width])
 
+  // Text tool: click to create new text box
+  const handleTextClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!interactive || tool !== 'text') return
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const nx = (e.clientX - rect.left) / rect.width
+      const ny = (e.clientY - rect.top) / rect.height
+      const id = uid()
+      const tb: TextBox = { id, x: nx, y: ny, text: '', color, fontSize, bold }
+      addTextBox(docId, pageNum, tb)
+      setEditingId(id)
+      setEditingText('')
+      setSelectedId(null)
+    },
+    [interactive, tool, color, fontSize, bold, docId, pageNum],
+  )
+
+  // Commit text edit
+  const commitTextEdit = useCallback(
+    (tbId: string, text: string) => {
+      if (text.trim() === '') {
+        removeTextBox(docId, pageNum, tbId)
+      } else {
+        updateTextBox(docId, pageNum, tbId, { text })
+      }
+      setEditingId(null)
+      setEditingText('')
+    },
+    [docId, pageNum],
+  )
+
+  // Click on background to deselect
+  const handleBgClick = useCallback(() => {
+    if (selectedId) setSelectedId(null)
+  }, [selectedId])
+
+  // Drag move/resize handlers (attached to window)
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      e.preventDefault()
+      const dx = (e.clientX - drag.startX) / canvasWidth
+      const dy = (e.clientY - drag.startY) / canvasHeight
+
+      if (drag.type === 'move') {
+        const newX = Math.max(0, Math.min(1, drag.origX + dx))
+        const newY = Math.max(0, Math.min(1, drag.origY + dy))
+        updateTextBox(docId, pageNum, drag.tbId, { x: newX, y: newY })
+      } else {
+        const dxPx = e.clientX - drag.startX
+        const newW = Math.max(40, drag.origW + dxPx)
+        updateTextBox(docId, pageNum, drag.tbId, { width: newW / canvasWidth })
+      }
+    }
+
+    const onMouseUp = () => {
+      dragRef.current = null
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [docId, pageNum, canvasWidth, canvasHeight])
+
   const dpr = window.devicePixelRatio || 1
-  const isEraser = tool === 'object-eraser' || tool === 'trace-eraser'
+  const isTextTool = tool === 'text'
+  const scale = Math.min(canvasWidth, canvasHeight) / 500
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={canvasWidth * dpr}
-      height={canvasHeight * dpr}
+    <div
+      ref={containerRef}
       style={{
         position: 'absolute',
         top: 0,
@@ -213,17 +300,181 @@ export default function AnnotationLayer({
         width: canvasWidth,
         height: canvasHeight,
         pointerEvents: interactive ? 'auto' : 'none',
-        cursor: interactive
-          ? isEraser
-            ? 'crosshair'
-            : 'crosshair'
-          : 'default',
-        touchAction: interactive ? 'none' : 'auto',
       }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    />
+    >
+      {/* Stroke canvas */}
+      <canvas
+        ref={canvasRef}
+        width={canvasWidth * dpr}
+        height={canvasHeight * dpr}
+        onClick={handleBgClick}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: canvasWidth,
+          height: canvasHeight,
+          pointerEvents: interactive && !isTextTool ? 'auto' : 'none',
+          cursor: interactive && !isTextTool ? 'crosshair' : 'default',
+          touchAction: interactive && !isTextTool ? 'none' : 'auto',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      />
+
+      {/* Text boxes */}
+      {textBoxes.map((tb) => {
+        const isEditing = editingId === tb.id
+        const isSelected = selectedId === tb.id
+        const left = tb.x * canvasWidth
+        const top = tb.y * canvasHeight
+        const fs = tb.fontSize * scale
+        const tbWidth = tb.width ? tb.width * canvasWidth : undefined
+
+        if (isEditing) {
+          return (
+            <textarea
+              key={tb.id}
+              autoFocus
+              value={editingText}
+              onChange={(e) => setEditingText(e.target.value)}
+              onBlur={() => commitTextEdit(tb.id, editingText)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') commitTextEdit(tb.id, editingText)
+                e.stopPropagation()
+              }}
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: tbWidth,
+                fontSize: fs,
+                fontWeight: tb.bold ? 700 : 400,
+                color: tb.color,
+                minWidth: 60,
+                minHeight: fs + 8,
+                background: 'rgba(255,255,255,0.95)',
+                border: '1.5px solid #3b82f6',
+                borderRadius: 4,
+                padding: '2px 4px',
+                outline: 'none',
+                resize: 'both',
+                lineHeight: 1.4,
+                zIndex: 10,
+                fontFamily: 'sans-serif',
+              }}
+            />
+          )
+        }
+
+        return (
+          <div
+            key={tb.id}
+            onMouseDown={(e) => {
+              if (!interactive) return
+              e.stopPropagation()
+
+              if (tool === 'object-eraser') {
+                removeTextBox(docId, pageNum, tb.id)
+                return
+              }
+
+              if (isSelected) {
+                // Already selected — start move drag
+                dragRef.current = {
+                  type: 'move',
+                  tbId: tb.id,
+                  startX: e.clientX,
+                  startY: e.clientY,
+                  origX: tb.x,
+                  origY: tb.y,
+                }
+              } else {
+                setSelectedId(tb.id)
+              }
+            }}
+            onDoubleClick={(e) => {
+              if (!interactive) return
+              e.stopPropagation()
+              setEditingId(tb.id)
+              setEditingText(tb.text)
+              setSelectedId(null)
+            }}
+            style={{
+              position: 'absolute',
+              left,
+              top,
+              width: tbWidth,
+              fontSize: fs,
+              fontWeight: tb.bold ? 700 : 400,
+              color: tb.color,
+              whiteSpace: 'pre-wrap',
+              wordBreak: tbWidth ? 'break-word' : undefined,
+              lineHeight: 1.4,
+              fontFamily: 'sans-serif',
+              cursor: interactive
+                ? tool === 'object-eraser'
+                  ? 'crosshair'
+                  : isSelected
+                    ? 'move'
+                    : 'pointer'
+                : 'default',
+              pointerEvents: interactive ? 'auto' : 'none',
+              userSelect: 'none',
+              border: isSelected ? '1.5px dashed #3b82f6' : '1.5px solid transparent',
+              borderRadius: 3,
+              padding: '1px 3px',
+              boxSizing: 'border-box',
+            }}
+          >
+            {tb.text}
+            {/* Resize handle */}
+            {isSelected && (
+              <div
+                onMouseDown={(e) => {
+                  e.stopPropagation()
+                  const el = e.currentTarget.parentElement!
+                  dragRef.current = {
+                    type: 'resize',
+                    tbId: tb.id,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origW: el.offsetWidth,
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  right: -4,
+                  bottom: -4,
+                  width: 10,
+                  height: 10,
+                  background: '#3b82f6',
+                  borderRadius: 2,
+                  cursor: 'nwse-resize',
+                }}
+              />
+            )}
+          </div>
+        )
+      })}
+
+      {/* Click overlay for text tool — behind text boxes but above canvas */}
+      {interactive && isTextTool && (
+        <div
+          onClick={handleTextClick}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: canvasWidth,
+            height: canvasHeight,
+            cursor: 'text',
+            zIndex: 0,
+          }}
+        />
+      )}
+    </div>
   )
 }

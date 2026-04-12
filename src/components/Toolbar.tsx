@@ -6,6 +6,8 @@ interface Props {
   search: string
   onSearch: (v: string) => void
   folderLabel: string
+  isMobile?: boolean
+  onMenuToggle?: () => void
 }
 
 function formatBytes(bytes: number): string {
@@ -15,7 +17,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)}GB`
 }
 
-export default function Toolbar({ search, onSearch, folderLabel }: Props) {
+export default function Toolbar({ search, onSearch, folderLabel, isMobile, onMenuToggle }: Props) {
   const stats = useLiveQuery(
     async () => {
       const docs = await db.documents.toArray()
@@ -27,11 +29,21 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
   )
 
   return (
-    <div className="h-11 px-5 border-b border-neutral-800/50 bg-neutral-900/40 flex items-center gap-3 text-sm whitespace-nowrap">
-      <div className="font-medium text-white truncate max-w-[220px] shrink-0">
+    <div className="h-11 px-3 md:px-5 border-b border-neutral-800/50 bg-neutral-900/40 flex items-center gap-2 md:gap-3 text-sm whitespace-nowrap">
+      {isMobile && (
+        <button
+          onClick={onMenuToggle}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition shrink-0"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </button>
+      )}
+      <div className="font-medium text-white truncate max-w-[160px] md:max-w-[220px] shrink-0">
         {folderLabel}
       </div>
-      <div className="flex-1 min-w-0 max-w-sm relative">
+      <div className="flex-1 min-w-0 max-w-sm relative hidden sm:block">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
           <circle cx="6" cy="6" r="4" />
           <path d="M9 9l3 3" />
@@ -44,7 +56,7 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
         />
       </div>
       <div className="flex-1" />
-      {stats.count > 0 && (
+      {!isMobile && stats.count > 0 && (
         <div className="text-[11px] text-neutral-600 shrink-0">
           {stats.count}件 · {formatBytes(stats.total)}
         </div>
@@ -55,11 +67,11 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
           const stamp = new Date().toISOString().slice(0, 10)
           downloadBlob(blob, `note-backup-${stamp}.zip`)
         }}
-        className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition shrink-0"
+        className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition shrink-0 hidden sm:block"
       >
         書き出し
       </button>
-      <label className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition cursor-pointer shrink-0">
+      <label className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition cursor-pointer shrink-0 hidden sm:block">
         読み込み
         <input
           type="file"

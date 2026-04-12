@@ -23,6 +23,8 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const [drawTool, setDrawTool] = useState<DrawTool>('pen')
   const [drawColor, setDrawColor] = useState('#000000')
   const [drawWidth, setDrawWidth] = useState(4)
+  const [textFontSize, setTextFontSize] = useState(16)
+  const [textBold, setTextBold] = useState(false)
   const [canvasDims, setCanvasDims] = useState({ w: 0, h: 0 })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -51,6 +53,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   // Annotation for current PDF page
   const annotation = useAnnotation(doc.id, currentPdfPageNum)
   const strokes = annotation?.strokes ?? []
+  const textBoxes = annotation?.textBoxes ?? []
 
   // Load PDF
   useEffect(() => {
@@ -222,6 +225,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
         return
       }
       if (drawMode) {
+        if (e.target instanceof HTMLTextAreaElement) return
         if (e.key === 'Escape') setDrawMode(false)
         return
       }
@@ -248,7 +252,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0a0a0a' }}>
       {/* Top toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap" style={{ background: '#141414' }}>
+      <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-auto scroll-thin" style={{ background: '#141414' }}>
         <button
           onClick={onClose}
           className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition"
@@ -285,19 +289,30 @@ export default function PdfViewer({ doc, onClose }: Props) {
         {/* Insert note page */}
         <button
           onClick={handleInsertNote}
-          className="h-7 px-2 rounded-md text-[11px] hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
           title="ノートページを挿入"
         >
-          +ノート
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+            <rect x="3" y="2" width="9" height="11" rx="1.5" />
+            <path d="M5.5 5.5h4M5.5 8h2.5" />
+            <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
+          </svg>
         </button>
 
         {/* Insert image page */}
         <button
           onClick={() => imageInputRef.current?.click()}
-          className="h-7 px-2 rounded-md text-[11px] hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
           title="画像ページを挿入"
         >
-          +画像
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="3" width="11" height="9" rx="1.5" />
+            <circle cx="5.5" cy="6" r="1.2" />
+            <path d="M2 10l3-2.5 2 1.5 2.5-2L13 10" />
+            <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
+            <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
+          </svg>
         </button>
         <input
           ref={imageInputRef}
@@ -315,10 +330,15 @@ export default function PdfViewer({ doc, onClose }: Props) {
         {(isNotePage || isImagePage) && (
           <button
             onClick={handleDeletePage}
-            className="h-7 px-2 rounded-md text-[11px] hover:bg-red-950/60 text-red-500/70 hover:text-red-400 transition"
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800/60 text-red-500/70 hover:text-red-400 transition"
             title="このページを削除"
           >
-            削除
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+              <path d="M3.5 4v7.5a1 1 0 001 1h5a1 1 0 001-1V4" />
+              <path d="M2.5 4h9" />
+              <path d="M5.5 2.5h3" />
+              <path d="M5.5 6v4M8.5 6v4" />
+            </svg>
           </button>
         )}
 
@@ -326,14 +346,17 @@ export default function PdfViewer({ doc, onClose }: Props) {
         {isPdfPage && (
           <button
             onClick={() => setDrawMode((v) => !v)}
-            className={`h-7 px-2.5 rounded-md text-[11px] transition ${
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
               drawMode
                 ? 'bg-white text-black'
                 : 'hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200'
             }`}
             title="ペンモード"
           >
-            ペン
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8.5 2.5l3 3-7.5 7.5H1v-3l7.5-7.5z" />
+              <path d="M7 4l3 3" />
+            </svg>
           </button>
         )}
 
@@ -341,23 +364,33 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
         <button
           onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          title="縮小"
         >
-          −
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="5.5" cy="5.5" r="3.5" />
+            <path d="M8 8l2.5 2.5" />
+            <path d="M3.5 5.5h4" />
+          </svg>
         </button>
         <span className="text-neutral-600 tabular-nums w-10 text-center text-[11px]">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition text-sm"
+          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          title="拡大"
         >
-          +
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="5.5" cy="5.5" r="3.5" />
+            <path d="M8 8l2.5 2.5" />
+            <path d="M3.5 5.5h4M5.5 3.5v4" />
+          </svg>
         </button>
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-auto scroll-thin flex items-start justify-center p-6 relative">
+      <div className="flex-1 overflow-auto scroll-thin flex items-start justify-center p-3 md:p-6 relative">
         {isNotePage ? (
           <NotePageView
             notePageId={currentEntry.notePageId}
@@ -376,10 +409,13 @@ export default function PdfViewer({ doc, onClose }: Props) {
                 docId={doc.id}
                 pageNum={currentPdfPageNum}
                 strokes={strokes}
+                textBoxes={textBoxes}
                 interactive={drawMode}
                 tool={drawTool}
                 color={drawColor}
                 width={drawWidth}
+                fontSize={textFontSize}
+                bold={textBold}
                 canvasWidth={canvasDims.w}
                 canvasHeight={canvasDims.h}
               />
@@ -406,9 +442,13 @@ export default function PdfViewer({ doc, onClose }: Props) {
           tool={drawTool}
           color={drawColor}
           width={drawWidth}
+          fontSize={textFontSize}
+          bold={textBold}
           onToolChange={setDrawTool}
           onColorChange={setDrawColor}
           onWidthChange={setDrawWidth}
+          onFontSizeChange={setTextFontSize}
+          onBoldChange={setTextBold}
           onDone={() => setDrawMode(false)}
         />
       )}

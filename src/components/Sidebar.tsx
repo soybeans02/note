@@ -44,7 +44,7 @@ export default function Sidebar({ selectedFolderId, onSelect }: Props) {
   const tree = useMemo(() => buildTree(folders), [folders])
 
   return (
-    <aside className="w-56 shrink-0 border-r border-neutral-800/50 bg-neutral-900/50 flex flex-col">
+    <aside className="w-64 md:w-56 h-full shrink-0 border-r border-neutral-800/50 bg-[#141414] flex flex-col">
       <div className="px-4 py-3.5 flex items-center justify-between">
         <span className="text-xs font-medium tracking-wide uppercase text-neutral-500">
           ライブラリ

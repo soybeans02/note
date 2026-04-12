@@ -26,8 +26,8 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
   }
 
   return (
-    <div className="flex-1 overflow-auto scroll-thin p-5">
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
+    <div className="flex-1 overflow-auto scroll-thin p-3 md:p-5">
+      <div className="grid gap-3 md:gap-4 grid-cols-2 sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
         {documents.map((doc) => (
           <Card key={doc.id} doc={doc} folders={folders} onOpen={() => onOpen(doc)} />
         ))}

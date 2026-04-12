@@ -34,11 +34,23 @@ export interface Stroke {
   width: number
 }
 
+export interface TextBox {
+  id: string
+  x: number // 0-1 normalized
+  y: number // 0-1 normalized
+  width?: number // 0-1 normalized
+  text: string
+  color: string
+  fontSize: number // in px at base scale
+  bold?: boolean
+}
+
 export interface Annotation {
   id: string // `${docId}-${pageNum}`
   docId: string
   pageNum: number
   strokes: Stroke[]
+  textBoxes?: TextBox[]
   updatedAt: number
 }
 

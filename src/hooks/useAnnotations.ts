@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, type Annotation, type Stroke } from '../db/db'
+import { db, uid, type Annotation, type Stroke, type TextBox } from '../db/db'
 
 export function useAnnotation(docId: string, pageNum: number): Annotation | undefined {
   return useLiveQuery(
@@ -79,6 +79,42 @@ export async function traceEraseAt(
     }
   }
   await saveStrokes(docId, pageNum, newStrokes)
+}
+
+export async function addTextBox(docId: string, pageNum: number, textBox: TextBox) {
+  const id = `${docId}-${pageNum}`
+  const existing = await db.annotations.get(id)
+  const textBoxes = existing?.textBoxes ? [...existing.textBoxes, textBox] : [textBox]
+  if (existing) {
+    await db.annotations.update(id, { textBoxes, updatedAt: Date.now() })
+  } else {
+    await db.annotations.add({
+      id,
+      docId,
+      pageNum,
+      strokes: [],
+      textBoxes,
+      updatedAt: Date.now(),
+    })
+  }
+}
+
+export async function updateTextBox(docId: string, pageNum: number, textBoxId: string, updates: Partial<TextBox>) {
+  const id = `${docId}-${pageNum}`
+  const existing = await db.annotations.get(id)
+  if (!existing?.textBoxes) return
+  const textBoxes = existing.textBoxes.map((tb) =>
+    tb.id === textBoxId ? { ...tb, ...updates } : tb,
+  )
+  await db.annotations.update(id, { textBoxes, updatedAt: Date.now() })
+}
+
+export async function removeTextBox(docId: string, pageNum: number, textBoxId: string) {
+  const id = `${docId}-${pageNum}`
+  const existing = await db.annotations.get(id)
+  if (!existing?.textBoxes) return
+  const textBoxes = existing.textBoxes.filter((tb) => tb.id !== textBoxId)
+  await db.annotations.update(id, { textBoxes, updatedAt: Date.now() })
 }
 
 export async function deleteAnnotationsForDocument(docId: string) {
