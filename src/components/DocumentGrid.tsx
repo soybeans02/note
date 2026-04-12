@@ -19,15 +19,15 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
 
   if (!documents.length) {
     return (
-      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
-        PDFをドラッグ&ドロップ、または右下の + から追加
+      <div className="flex-1 flex items-center justify-center text-neutral-600 text-sm">
+        ファイルをドロップ、または右下の + から追加
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-auto scroll-thin p-6">
-      <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(170px,1fr))]">
+    <div className="flex-1 overflow-auto scroll-thin p-5">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
         {documents.map((doc) => (
           <Card key={doc.id} doc={doc} folders={folders} onOpen={() => onOpen(doc)} />
         ))}
@@ -49,13 +49,13 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
             reorderDocument(id, null)
           }
         }}
-        className={`mt-2 h-16 rounded-lg border-2 border-dashed transition ${
-          tailHover ? 'border-sky-500 bg-sky-500/10' : 'border-transparent'
+        className={`mt-2 h-14 rounded-lg border-2 border-dashed transition ${
+          tailHover ? 'border-neutral-600 bg-neutral-900/50' : 'border-transparent'
         }`}
       >
         {tailHover && (
-          <div className="h-full flex items-center justify-center text-xs text-sky-300">
-            ここにドロップで末尾へ
+          <div className="h-full flex items-center justify-center text-xs text-neutral-500">
+            末尾に移動
           </div>
         )}
       </div>
@@ -77,7 +77,7 @@ function Card({
   return (
     <div className="relative">
       {insertHere && (
-        <div className="absolute -left-2.5 top-0 bottom-0 w-1 bg-sky-400 rounded pointer-events-none" />
+        <div className="absolute -left-2 top-0 bottom-0 w-0.5 bg-neutral-500 rounded pointer-events-none" />
       )}
       <div
         draggable
@@ -117,9 +117,9 @@ function Card({
             if (confirm(`「${doc.name}」を削除しますか？`)) deleteDocument(doc.id)
           }
         }}
-        className="group cursor-pointer flex flex-col rounded-lg overflow-hidden bg-slate-900 border border-slate-800 hover:border-sky-500 hover:-translate-y-0.5 transition"
+        className="group cursor-pointer flex flex-col rounded-xl overflow-hidden bg-neutral-900/80 border border-neutral-800/50 hover:border-neutral-600 hover:-translate-y-0.5 transition-all duration-150"
       >
-        <div className="aspect-[3/4] bg-slate-800 flex items-center justify-center">
+        <div className="aspect-[3/4] bg-neutral-800/50 flex items-center justify-center">
           {doc.thumbDataUrl ? (
             <img
               src={doc.thumbDataUrl}
@@ -127,16 +127,28 @@ function Card({
               className="w-full h-full object-cover"
             />
           ) : (
-            <span className="text-slate-600 text-3xl">📄</span>
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-neutral-700">
+              <path d="M10 4h8l6 6v18a2 2 0 01-2 2H10a2 2 0 01-2-2V6a2 2 0 012-2z" />
+              <path d="M18 4v6h6" />
+            </svg>
           )}
         </div>
-        <div className="px-2.5 py-2">
-          <div className="text-sm text-slate-100 truncate" title={doc.name}>
+        <div className="px-3 py-2.5">
+          <div className="text-[13px] text-white truncate leading-tight" title={doc.name}>
             {doc.name}
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1">
-            <span>{doc.pageCount}p · {(doc.size / 1024 / 1024).toFixed(1)}MB</span>
-            {doc.notes && <span title="メモあり">📝</span>}
+          <div className="text-[11px] text-neutral-600 mt-1 flex items-center gap-1.5">
+            <span>{doc.pageCount}p</span>
+            <span className="text-neutral-700">·</span>
+            <span>{(doc.size / 1024 / 1024).toFixed(1)}MB</span>
+            {doc.notes && (
+              <>
+                <span className="text-neutral-700">·</span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-neutral-500">
+                  <path d="M2 2h6M2 4h6M2 6h4" />
+                </svg>
+              </>
+            )}
           </div>
         </div>
       </div>

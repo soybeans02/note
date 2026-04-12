@@ -135,7 +135,7 @@ export async function renameDocument(id: string, name: string) {
 export async function deleteDocument(id: string) {
   await db.transaction(
     'rw',
-    [db.documents, db.blobs, db.annotations, db.notePages],
+    [db.documents, db.blobs, db.annotations, db.notePages, db.imagePages],
     async () => {
       await db.documents.delete(id)
       await db.blobs.delete(id)
@@ -148,6 +148,12 @@ export async function deleteDocument(id: string) {
         .equals(id)
         .primaryKeys()
       await db.notePages.bulkDelete(npKeys)
+      // Cascade delete image pages
+      const ipKeys = await db.imagePages
+        .where('documentId')
+        .equals(id)
+        .primaryKeys()
+      await db.imagePages.bulkDelete(ipKeys)
     },
   )
 }

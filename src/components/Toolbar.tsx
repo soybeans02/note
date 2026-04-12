@@ -27,17 +27,25 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
   )
 
   return (
-    <div className="h-12 px-5 border-b border-slate-800 bg-slate-900/40 flex items-center gap-3 text-sm whitespace-nowrap">
-      <div className="font-semibold text-slate-200 truncate max-w-[220px] shrink-0">{folderLabel}</div>
-      <input
-        value={search}
-        onChange={(e) => onSearch(e.target.value)}
-        placeholder="名前で検索…"
-        className="flex-1 min-w-0 max-w-md bg-slate-800/70 border border-slate-700 focus:border-sky-500 focus:outline-none rounded px-3 py-1.5 text-slate-100 placeholder:text-slate-500"
-      />
+    <div className="h-11 px-5 border-b border-neutral-800/50 bg-neutral-900/40 flex items-center gap-3 text-sm whitespace-nowrap">
+      <div className="font-medium text-white truncate max-w-[220px] shrink-0">
+        {folderLabel}
+      </div>
+      <div className="flex-1 min-w-0 max-w-sm relative">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none">
+          <circle cx="6" cy="6" r="4" />
+          <path d="M9 9l3 3" />
+        </svg>
+        <input
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="検索"
+          className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 focus:outline-none rounded-lg pl-8 pr-3 py-1.5 text-[13px] text-neutral-200 placeholder:text-neutral-600 transition"
+        />
+      </div>
       <div className="flex-1" />
       {stats.count > 0 && (
-        <div className="text-[11px] text-slate-500 shrink-0">
+        <div className="text-[11px] text-neutral-600 shrink-0">
           {stats.count}件 · {formatBytes(stats.total)}
         </div>
       )}
@@ -47,12 +55,12 @@ export default function Toolbar({ search, onSearch, folderLabel }: Props) {
           const stamp = new Date().toISOString().slice(0, 10)
           downloadBlob(blob, `note-backup-${stamp}.zip`)
         }}
-        className="text-xs px-2.5 py-1 rounded border border-slate-700 hover:border-slate-500 text-slate-300 shrink-0"
+        className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition shrink-0"
       >
-        エクスポート
+        書き出し
       </button>
-      <label className="text-xs px-2.5 py-1 rounded border border-slate-700 hover:border-slate-500 text-slate-300 cursor-pointer shrink-0">
-        インポート
+      <label className="text-[11px] px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 transition cursor-pointer shrink-0">
+        読み込み
         <input
           type="file"
           accept=".zip"

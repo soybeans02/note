@@ -51,12 +51,22 @@ export interface NotePage {
   updatedAt: number
 }
 
+export interface ImagePage {
+  id: string
+  documentId: string
+  afterPage: number
+  blob: Blob
+  createdAt: number
+  updatedAt: number
+}
+
 class NoteDB extends Dexie {
   folders!: Table<Folder, string>
   documents!: Table<DocumentMeta, string>
   blobs!: Table<DocumentBlob, string>
   annotations!: Table<Annotation, string>
   notePages!: Table<NotePage, string>
+  imagePages!: Table<ImagePage, string>
 
   constructor() {
     super('note-db')
@@ -138,6 +148,14 @@ class NoteDB extends Dexie {
           }
         }
       })
+    this.version(5).stores({
+      folders: 'id, parentId, name, order, updatedAt',
+      documents: 'id, folderId, name, order, updatedAt',
+      blobs: 'id',
+      annotations: 'id, docId, pageNum',
+      notePages: 'id, documentId, afterPage',
+      imagePages: 'id, documentId, afterPage',
+    })
   }
 }
 

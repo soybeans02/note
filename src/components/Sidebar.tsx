@@ -44,22 +44,26 @@ export default function Sidebar({ selectedFolderId, onSelect }: Props) {
   const tree = useMemo(() => buildTree(folders), [folders])
 
   return (
-    <aside className="w-64 shrink-0 border-r border-slate-800 bg-slate-900/60 flex flex-col">
-      <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-200">ライブラリ</span>
+    <aside className="w-56 shrink-0 border-r border-neutral-800/50 bg-neutral-900/50 flex flex-col">
+      <div className="px-4 py-3.5 flex items-center justify-between">
+        <span className="text-xs font-medium tracking-wide uppercase text-neutral-500">
+          ライブラリ
+        </span>
         <button
           onClick={() => {
             const name = prompt('フォルダ名')
             if (name) createFolder(name, null)
           }}
-          className="text-xs text-slate-400 hover:text-slate-100"
-          title="ルートに新規フォルダ"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 transition"
+          title="新規フォルダ"
         >
-          + 新規
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M7 3v8M3 7h8" />
+          </svg>
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto scroll-thin py-2">
+      <div className="flex-1 overflow-auto scroll-thin px-2 pb-2">
         <RootRow
           selected={selectedFolderId === null}
           onSelect={() => onSelect(null)}
@@ -76,8 +80,8 @@ export default function Sidebar({ selectedFolderId, onSelect }: Props) {
         ))}
       </div>
 
-      <div className="px-4 py-2 text-[10px] text-slate-500 border-t border-slate-800">
-        IndexedDB に保存。サブスク代節約モード on.
+      <div className="px-4 py-2.5 text-[10px] text-neutral-600 border-t border-neutral-800/60">
+        ローカル保存
       </div>
     </aside>
   )
@@ -101,11 +105,16 @@ function RootRow({ selected, onSelect }: { selected: boolean; onSelect: () => vo
         const folderId = e.dataTransfer.getData('application/x-folder-id')
         if (folderId) moveFolder(folderId, null)
       }}
-      className={`px-4 py-1.5 text-sm cursor-pointer flex items-center gap-2 ${
-        selected ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-      } ${hover ? 'ring-1 ring-sky-500' : ''}`}
+      className={`px-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-2.5 mb-0.5 transition ${
+        selected
+          ? 'bg-white/10 text-white font-medium'
+          : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
+      } ${hover ? 'ring-1 ring-neutral-600' : ''}`}
     >
-      <span>📚</span>
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 opacity-60">
+        <rect x="2" y="3" width="11" height="9" rx="1.5" />
+        <path d="M2 5.5h11" />
+      </svg>
       <span>すべて</span>
     </div>
   )
@@ -132,7 +141,7 @@ function FolderRow({
 
   const computeZone = (e: React.DragEvent<HTMLDivElement>): DropZone => {
     const isFolderDrag = e.dataTransfer.types.includes('application/x-folder-id')
-    if (!isFolderDrag) return 'into' // documents always go INTO this folder
+    if (!isFolderDrag) return 'into'
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
     if (y < rect.height * 0.25) return 'before'
@@ -193,16 +202,18 @@ function FolderRow({
             }
           }
         }}
-        style={{ paddingLeft: 12 + depth * 14 }}
-        className={`relative pr-3 py-1.5 text-sm cursor-pointer flex items-center gap-1.5 select-none ${
-          selected ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/60'
-        } ${zone === 'into' ? 'ring-1 ring-sky-500' : ''}`}
+        style={{ paddingLeft: 12 + depth * 16 }}
+        className={`relative pr-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-1.5 select-none mb-0.5 transition ${
+          selected
+            ? 'bg-white/10 text-white font-medium'
+            : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
+        } ${zone === 'into' ? 'ring-1 ring-neutral-600' : ''}`}
       >
         {zone === 'before' && (
-          <span className="absolute left-0 right-0 top-0 h-0.5 bg-sky-400 pointer-events-none" />
+          <span className="absolute left-2 right-2 top-0 h-0.5 bg-neutral-500 rounded pointer-events-none" />
         )}
         {zone === 'after' && (
-          <span className="absolute left-0 right-0 bottom-0 h-0.5 bg-sky-400 pointer-events-none" />
+          <span className="absolute left-2 right-2 bottom-0 h-0.5 bg-neutral-500 rounded pointer-events-none" />
         )}
         {node.children.length > 0 ? (
           <button
@@ -210,14 +221,18 @@ function FolderRow({
               e.stopPropagation()
               setOpen((v) => !v)
             }}
-            className="w-4 text-slate-500 hover:text-slate-200"
+            className="w-4 text-neutral-600 hover:text-neutral-300 transition"
           >
-            {open ? '▾' : '▸'}
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={`transition-transform ${open ? 'rotate-90' : ''}`}>
+              <path d="M3 1.5l4 3.5-4 3.5z" />
+            </svg>
           </button>
         ) : (
           <span className="w-4" />
         )}
-        <span>{open ? '📂' : '📁'}</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" className="shrink-0 opacity-50">
+          <path d="M2 4.5V11a1 1 0 001 1h8a1 1 0 001-1V6a1 1 0 00-1-1H7L5.5 3H3a1 1 0 00-1 1v.5z" />
+        </svg>
         <span className="truncate">{node.name}</span>
       </div>
       {open &&

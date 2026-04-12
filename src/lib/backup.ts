@@ -24,7 +24,25 @@ interface BackupManifestV2 {
   notePages: NotePage[]
 }
 
-type BackupManifest = BackupManifestV1 | BackupManifestV2
+interface ImagePageMeta {
+  id: string
+  documentId: string
+  afterPage: number
+  createdAt: number
+  updatedAt: number
+}
+
+interface BackupManifestV3 {
+  version: 3
+  exportedAt: number
+  folders: Folder[]
+  documents: DocumentMeta[]
+  annotations: Annotation[]
+  notePages: NotePage[]
+  imagePages: ImagePageMeta[]
+}
+
+type BackupManifest = BackupManifestV1 | BackupManifestV2 | BackupManifestV3
 
 export async function exportAll(): Promise<Blob> {
   const zip = new JSZip()
@@ -32,20 +50,39 @@ export async function exportAll(): Promise<Blob> {
   const documents = await db.documents.toArray()
   const annotations = await db.annotations.toArray()
   const notePages = await db.notePages.toArray()
-  const manifest: BackupManifestV2 = {
-    version: 2,
+  const imagePageRows = await db.imagePages.toArray()
+
+  const imagePagesMeta: ImagePageMeta[] = imagePageRows.map((ip) => ({
+    id: ip.id,
+    documentId: ip.documentId,
+    afterPage: ip.afterPage,
+    createdAt: ip.createdAt,
+    updatedAt: ip.updatedAt,
+  }))
+
+  const manifest: BackupManifestV3 = {
+    version: 3,
     exportedAt: Date.now(),
     folders,
     documents,
     annotations,
     notePages,
+    imagePages: imagePagesMeta,
   }
   zip.file('manifest.json', JSON.stringify(manifest, null, 2))
+
   const blobsFolder = zip.folder('blobs')!
   for (const doc of documents) {
     const row = await db.blobs.get(doc.id)
     if (row) blobsFolder.file(`${doc.id}.pdf`, row.blob)
   }
+
+  // Store image blobs
+  const imagesFolder = zip.folder('images')!
+  for (const ip of imagePageRows) {
+    imagesFolder.file(ip.id, ip.blob)
+  }
+
   return zip.generateAsync({ type: 'blob' })
 }
 
@@ -59,12 +96,12 @@ export async function importAll(
     await manifestFile.async('string'),
   ) as BackupManifest
 
-  if (manifest.version !== 1 && manifest.version !== 2)
+  if (manifest.version !== 1 && manifest.version !== 2 && manifest.version !== 3)
     throw new Error('未対応のバックアップ形式です')
 
   await db.transaction(
     'rw',
-    [db.folders, db.documents, db.blobs, db.annotations, db.notePages],
+    [db.folders, db.documents, db.blobs, db.annotations, db.notePages, db.imagePages],
     async () => {
       await db.folders.bulkPut(manifest.folders)
       await db.documents.bulkPut(manifest.documents)
@@ -76,9 +113,10 @@ export async function importAll(
         await db.blobs.put({ id: doc.id, blob })
       }
 
-      if (manifest.version === 2) {
-        await db.annotations.bulkPut(manifest.annotations)
-        await db.notePages.bulkPut(manifest.notePages)
+      if (manifest.version >= 2) {
+        const m = manifest as BackupManifestV2 | BackupManifestV3
+        await db.annotations.bulkPut(m.annotations)
+        await db.notePages.bulkPut(m.notePages)
       } else {
         // v1: migrate old notes field to notePages
         for (const doc of manifest.documents) {
@@ -94,6 +132,18 @@ export async function importAll(
               updatedAt: now,
             })
           }
+        }
+      }
+
+      if (manifest.version === 3) {
+        for (const ipMeta of manifest.imagePages) {
+          const entry = zip.file(`images/${ipMeta.id}`)
+          if (!entry) continue
+          const blob = await entry.async('blob')
+          await db.imagePages.put({
+            ...ipMeta,
+            blob,
+          })
         }
       }
     },

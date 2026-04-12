@@ -17,7 +17,7 @@ export default function App() {
   const documents = useDocumentsInFolder(selectedFolderId, search)
 
   const folderLabel = useMemo(() => {
-    if (selectedFolderId === null) return 'すべてのドキュメント'
+    if (selectedFolderId === null) return 'すべて'
     return folders.find((f) => f.id === selectedFolderId)?.name ?? '(削除済み)'
   }, [folders, selectedFolderId])
 

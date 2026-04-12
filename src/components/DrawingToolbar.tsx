@@ -1,8 +1,10 @@
+export type DrawTool = 'pen' | 'object-eraser' | 'trace-eraser'
+
 interface Props {
-  tool: 'pen' | 'eraser'
+  tool: DrawTool
   color: string
   width: number
-  onToolChange: (tool: 'pen' | 'eraser') => void
+  onToolChange: (tool: DrawTool) => void
   onColorChange: (color: string) => void
   onWidthChange: (width: number) => void
   onDone: () => void
@@ -31,67 +33,91 @@ export default function DrawingToolbar({
   onWidthChange,
   onDone,
 }: Props) {
+  const isEraser = tool === 'object-eraser' || tool === 'trace-eraser'
+
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-slate-800/95 backdrop-blur border border-slate-700 rounded-xl px-3 py-2 shadow-2xl z-20">
-      {/* Pen / Eraser */}
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-neutral-900/95 backdrop-blur-md border border-neutral-800 rounded-2xl px-3 py-2 shadow-2xl z-20">
+      {/* Pen */}
       <button
         onClick={() => onToolChange('pen')}
-        className={`px-2.5 py-1.5 rounded-lg text-sm transition ${
+        className={`h-7 px-2.5 rounded-lg text-[11px] transition ${
           tool === 'pen'
-            ? 'bg-sky-600 text-white'
-            : 'text-slate-300 hover:bg-slate-700'
+            ? 'bg-white text-black'
+            : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
         }`}
       >
         ペン
       </button>
+
+      {/* Object eraser */}
       <button
-        onClick={() => onToolChange('eraser')}
-        className={`px-2.5 py-1.5 rounded-lg text-sm transition ${
-          tool === 'eraser'
-            ? 'bg-sky-600 text-white'
-            : 'text-slate-300 hover:bg-slate-700'
+        onClick={() => onToolChange('object-eraser')}
+        className={`h-7 px-2.5 rounded-lg text-[11px] transition ${
+          tool === 'object-eraser'
+            ? 'bg-white text-black'
+            : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
         }`}
+        title="ストローク全体を削除"
       >
         消しゴム
       </button>
 
-      <div className="w-px h-6 bg-slate-600 mx-1" />
+      {/* Trace eraser */}
+      <button
+        onClick={() => onToolChange('trace-eraser')}
+        className={`h-7 px-2.5 rounded-lg text-[11px] transition ${
+          tool === 'trace-eraser'
+            ? 'bg-white text-black'
+            : 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
+        }`}
+        title="なぞった部分だけ消す"
+      >
+        なぞり消し
+      </button>
 
-      {/* Colors */}
-      {COLORS.map((c) => (
-        <button
-          key={c.value}
-          onClick={() => onColorChange(c.value)}
-          title={c.label}
-          className={`w-6 h-6 rounded-full border-2 transition ${
-            color === c.value ? 'border-white scale-110' : 'border-slate-600'
-          }`}
-          style={{ backgroundColor: c.value }}
-        />
-      ))}
+      {!isEraser && (
+        <>
+          <div className="w-px h-5 bg-neutral-800 mx-0.5" />
 
-      <div className="w-px h-6 bg-slate-600 mx-1" />
+          {/* Colors */}
+          {COLORS.map((c) => (
+            <button
+              key={c.value}
+              onClick={() => onColorChange(c.value)}
+              title={c.label}
+              className={`w-5 h-5 rounded-full border-[1.5px] transition ${
+                color === c.value
+                  ? 'border-white scale-110'
+                  : 'border-neutral-700 hover:border-neutral-500'
+              }`}
+              style={{ backgroundColor: c.value }}
+            />
+          ))}
 
-      {/* Widths */}
-      {WIDTHS.map((w) => (
-        <button
-          key={w.value}
-          onClick={() => onWidthChange(w.value)}
-          className={`px-2 py-1 rounded text-xs transition ${
-            width === w.value
-              ? 'bg-sky-600 text-white'
-              : 'text-slate-400 hover:bg-slate-700'
-          }`}
-        >
-          {w.label}
-        </button>
-      ))}
+          <div className="w-px h-5 bg-neutral-800 mx-0.5" />
 
-      <div className="w-px h-6 bg-slate-600 mx-1" />
+          {/* Widths */}
+          {WIDTHS.map((w) => (
+            <button
+              key={w.value}
+              onClick={() => onWidthChange(w.value)}
+              className={`h-6 px-2 rounded-md text-[10px] transition ${
+                width === w.value
+                  ? 'bg-neutral-700 text-white'
+                  : 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300'
+              }`}
+            >
+              {w.label}
+            </button>
+          ))}
+        </>
+      )}
+
+      <div className="w-px h-5 bg-neutral-800 mx-0.5" />
 
       <button
         onClick={onDone}
-        className="px-3 py-1.5 rounded-lg text-sm bg-slate-600 text-white hover:bg-slate-500 transition"
+        className="h-7 px-3 rounded-lg text-[11px] bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition"
       >
         完了
       </button>

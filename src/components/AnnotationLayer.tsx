@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef } from 'react'
 import getStroke from 'perfect-freehand'
 import { uid, type Stroke } from '../db/db'
-import { addStroke, removeStroke } from '../hooks/useAnnotations'
+import { addStroke, removeStroke, traceEraseAt } from '../hooks/useAnnotations'
+import type { DrawTool } from './DrawingToolbar'
 
 interface Props {
   docId: string
   pageNum: number
   strokes: Stroke[]
   interactive: boolean
-  tool: 'pen' | 'eraser'
+  tool: DrawTool
   color: string
   width: number
   canvasWidth: number
@@ -114,9 +115,14 @@ export default function AnnotationLayer({
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
       const pt = normalizePoint(e)
 
-      if (tool === 'eraser') {
+      if (tool === 'object-eraser') {
         const hit = findStrokeAt(pt[0], pt[1])
         if (hit) removeStroke(docId, pageNum, hit.id)
+        return
+      }
+
+      if (tool === 'trace-eraser') {
+        traceEraseAt(docId, pageNum, pt[0], pt[1])
         return
       }
 
@@ -129,7 +135,8 @@ export default function AnnotationLayer({
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!interactive) return
-      if (tool === 'eraser') {
+
+      if (tool === 'object-eraser') {
         if (e.buttons > 0) {
           const pt = normalizePoint(e)
           const hit = findStrokeAt(pt[0], pt[1])
@@ -137,6 +144,15 @@ export default function AnnotationLayer({
         }
         return
       }
+
+      if (tool === 'trace-eraser') {
+        if (e.buttons > 0) {
+          const pt = normalizePoint(e)
+          traceEraseAt(docId, pageNum, pt[0], pt[1])
+        }
+        return
+      }
+
       if (!drawingRef.current) return
       e.preventDefault()
       const pt = normalizePoint(e)
@@ -183,6 +199,7 @@ export default function AnnotationLayer({
   }, [docId, pageNum, color, width])
 
   const dpr = window.devicePixelRatio || 1
+  const isEraser = tool === 'object-eraser' || tool === 'trace-eraser'
 
   return (
     <canvas
@@ -197,7 +214,7 @@ export default function AnnotationLayer({
         height: canvasHeight,
         pointerEvents: interactive ? 'auto' : 'none',
         cursor: interactive
-          ? tool === 'eraser'
+          ? isEraser
             ? 'crosshair'
             : 'crosshair'
           : 'default',
