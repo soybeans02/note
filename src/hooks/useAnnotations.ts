@@ -117,6 +117,28 @@ export async function removeTextBox(docId: string, pageNum: number, textBoxId: s
   await db.annotations.update(id, { textBoxes, updatedAt: Date.now() })
 }
 
+export async function restoreAnnotation(
+  docId: string,
+  pageNum: number,
+  strokes: Stroke[],
+  textBoxes: TextBox[],
+) {
+  const id = `${docId}-${pageNum}`
+  const existing = await db.annotations.get(id)
+  if (existing) {
+    await db.annotations.update(id, { strokes, textBoxes, updatedAt: Date.now() })
+  } else {
+    await db.annotations.add({
+      id,
+      docId,
+      pageNum,
+      strokes,
+      textBoxes,
+      updatedAt: Date.now(),
+    })
+  }
+}
+
 export async function deleteAnnotationsForDocument(docId: string) {
   const keys = await db.annotations.where('docId').equals(docId).primaryKeys()
   await db.annotations.bulkDelete(keys)

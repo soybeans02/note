@@ -6,6 +6,7 @@ import { buildPageSequence, type PageEntry } from '../lib/pageSequence'
 import { useNotePages, addNotePage, saveNotePage, deleteNotePage } from '../hooks/useNotePages'
 import { useImagePages, addImagePage, deleteImagePage } from '../hooks/useImagePages'
 import { useAnnotation } from '../hooks/useAnnotations'
+import { useUndoRedo } from '../hooks/useUndoRedo'
 import AnnotationLayer from './AnnotationLayer'
 import DrawingToolbar, { type DrawTool } from './DrawingToolbar'
 import Tooltip from './Tooltip'
@@ -55,6 +56,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const annotation = useAnnotation(doc.id, currentPdfPageNum)
   const strokes = annotation?.strokes ?? []
   const textBoxes = annotation?.textBoxes ?? []
+  const { undo, redo, canUndo, canRedo } = useUndoRedo(doc.id, currentPdfPageNum, annotation)
 
   // Load PDF
   useEffect(() => {
@@ -228,6 +230,14 @@ export default function PdfViewer({ doc, onClose }: Props) {
       if (drawMode) {
         if (e.target instanceof HTMLTextAreaElement) return
         if (e.key === 'Escape') setDrawMode(false)
+        if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+          e.preventDefault()
+          undo()
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+          e.preventDefault()
+          redo()
+        }
         return
       }
       if (e.key === 'Escape') onClose()
@@ -240,7 +250,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [total, isNotePage, drawMode, onClose])
+  }, [total, isNotePage, drawMode, onClose, undo, redo])
 
   const pageLabel = isNotePage
     ? 'ノート'
@@ -452,11 +462,15 @@ export default function PdfViewer({ doc, onClose }: Props) {
           width={drawWidth}
           fontSize={textFontSize}
           bold={textBold}
+          canUndo={canUndo}
+          canRedo={canRedo}
           onToolChange={setDrawTool}
           onColorChange={setDrawColor}
           onWidthChange={setDrawWidth}
           onFontSizeChange={setTextFontSize}
           onBoldChange={setTextBold}
+          onUndo={undo}
+          onRedo={redo}
           onDone={() => setDrawMode(false)}
         />
       )}

@@ -8,11 +8,15 @@ interface Props {
   width: number
   fontSize: number
   bold: boolean
+  canUndo: boolean
+  canRedo: boolean
   onToolChange: (tool: DrawTool) => void
   onColorChange: (color: string) => void
   onWidthChange: (width: number) => void
   onFontSizeChange: (size: number) => void
   onBoldChange: (bold: boolean) => void
+  onUndo: () => void
+  onRedo: () => void
   onDone: () => void
 }
 
@@ -46,11 +50,15 @@ export default function DrawingToolbar({
   width,
   fontSize,
   bold,
+  canUndo,
+  canRedo,
   onToolChange,
   onColorChange,
   onWidthChange,
   onFontSizeChange,
   onBoldChange,
+  onUndo,
+  onRedo,
   onDone,
 }: Props) {
   const showColorWidth = tool === 'pen' || tool === 'text'
@@ -201,6 +209,44 @@ export default function DrawingToolbar({
           )}
         </>
       )}
+
+      <div className="w-px h-5 bg-neutral-800 mx-0.5" />
+
+      {/* Undo */}
+      <Tooltip label="元に戻す">
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+            canUndo
+              ? 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
+              : 'text-neutral-700 cursor-default'
+          }`}
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 5.5l-2.5 2 2.5 2" />
+            <path d="M1.5 7.5h8a3.5 3.5 0 010 7H7" />
+          </svg>
+        </button>
+      </Tooltip>
+
+      {/* Redo */}
+      <Tooltip label="やり直す">
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition ${
+            canRedo
+              ? 'text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200'
+              : 'text-neutral-700 cursor-default'
+          }`}
+        >
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M11 5.5l2.5 2-2.5 2" />
+            <path d="M13.5 7.5h-8a3.5 3.5 0 000 7H8" />
+          </svg>
+        </button>
+      </Tooltip>
 
       <div className="w-px h-5 bg-neutral-800 mx-0.5" />
 
