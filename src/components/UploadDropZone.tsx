@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { addPdfFiles, createBlankNote } from '../hooks/useDocuments'
+import { addPdfFiles, addImageFiles, createBlankNote } from '../hooks/useDocuments'
 import { type DocumentMeta } from '../db/db'
 
 interface Props {
@@ -15,11 +15,14 @@ export default function UploadDropZone({ folderId, children, onOpenDoc }: Props)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFiles = async (files: FileList | File[]) => {
-    const arr = Array.from(files).filter((f) => f.name.toLowerCase().endsWith('.pdf'))
-    if (!arr.length) return
+    const all = Array.from(files)
+    const pdfs = all.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'))
+    const images = all.filter((f) => f.type.startsWith('image/'))
+    if (!pdfs.length && !images.length) return
     setBusy(true)
     try {
-      await addPdfFiles(arr, folderId)
+      if (pdfs.length) await addPdfFiles(pdfs, folderId)
+      if (images.length) await addImageFiles(images, folderId)
     } finally {
       setBusy(false)
     }
@@ -56,7 +59,7 @@ export default function UploadDropZone({ folderId, children, onOpenDoc }: Props)
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf"
+        accept="application/pdf,image/*"
         multiple
         className="hidden"
         onChange={(e) => {
@@ -94,7 +97,7 @@ export default function UploadDropZone({ folderId, children, onOpenDoc }: Props)
                   <path d="M4 2h4l4 4v6a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" />
                   <path d="M8 2v4h4" />
                 </svg>
-                PDFを開く
+                ファイルを開く
               </button>
             </div>
           </>

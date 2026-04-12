@@ -264,13 +264,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [total, isNotePage, drawMode, onClose, undo, redo])
 
-  const pageLabel = isNotePage
-    ? 'ノート'
-    : isImagePage
-      ? '画像'
-      : isPdfPage
-        ? `${currentPdfPageNum}`
-        : '—'
+  const pageLabel = `${page}`
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0a0a0a' }}>
