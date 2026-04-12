@@ -28,11 +28,10 @@ export function useDocumentsInFolder(
 async function nextOrderInFolder(folderId: string | null): Promise<number> {
   const siblings =
     folderId === null
-      ? await db.documents.toArray()
+      ? (await db.documents.toArray()).filter((d) => d.folderId === null)
       : await db.documents.where('folderId').equals(folderId).toArray()
-  const sameFolder = siblings.filter((d) => (d.folderId ?? null) === folderId)
-  if (!sameFolder.length) return 0
-  return Math.max(...sameFolder.map((d) => d.order ?? 0)) + 1
+  if (!siblings.length) return 0
+  return Math.max(...siblings.map((d) => d.order ?? 0)) + 1
 }
 
 export async function addPdfFiles(files: File[], folderId: string | null) {
@@ -69,10 +68,6 @@ export async function moveDocument(id: string, folderId: string | null) {
   await db.documents.update(id, { folderId, order, updatedAt: Date.now() })
 }
 
-export async function saveNotes(id: string, notes: string) {
-  await db.documents.update(id, { notes })
-}
-
 export async function createBlankNote(folderId: string | null): Promise<string> {
   const id = uid()
   const now = Date.now()
@@ -105,11 +100,9 @@ export async function reorderDocument(draggedId: string, beforeId: string | null
 
   const siblings = (
     folderId === null
-      ? await db.documents.toArray()
+      ? (await db.documents.toArray()).filter((d) => d.folderId === null)
       : await db.documents.where('folderId').equals(folderId).toArray()
-  )
-    .filter((d) => (d.folderId ?? null) === folderId)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  ).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
   const without = siblings.filter((d) => d.id !== draggedId)
   let insertAt = without.length

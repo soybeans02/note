@@ -121,5 +121,3 @@ export async function deleteAnnotationsForDocument(docId: string) {
   const keys = await db.annotations.where('docId').equals(docId).primaryKeys()
   await db.annotations.bulkDelete(keys)
 }
-
-export { uid }

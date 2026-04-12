@@ -29,19 +29,20 @@ export async function renameFolder(id: string, name: string) {
   await db.folders.update(id, { name: name.trim() || '無題', updatedAt: Date.now() })
 }
 
+function isDescendantOf(all: Folder[], ancestorId: string, candidateId: string | null): boolean {
+  let cur = candidateId
+  while (cur) {
+    if (cur === ancestorId) return true
+    const parent = all.find((f) => f.id === cur)
+    cur = parent?.parentId ?? null
+  }
+  return false
+}
+
 export async function moveFolder(id: string, newParentId: string | null) {
   if (id === newParentId) return
   const all = await db.folders.toArray()
-  const isDescendant = (candidateId: string | null): boolean => {
-    let cur = candidateId
-    while (cur) {
-      if (cur === id) return true
-      const parent = all.find((f) => f.id === cur)
-      cur = parent?.parentId ?? null
-    }
-    return false
-  }
-  if (newParentId && isDescendant(newParentId)) return
+  if (newParentId && isDescendantOf(all, id, newParentId)) return
   // Append at the end of the destination parent
   const siblings = all.filter((f) => (f.parentId ?? null) === newParentId && f.id !== id)
   const order = siblings.length
@@ -67,18 +68,7 @@ export async function reorderFolder(
   if (!dragged || !ref) return
 
   const targetParentId = ref.parentId ?? null
-
-  // cycle guard: don't put a folder under its own descendant
-  const isDescendant = (candidateId: string | null): boolean => {
-    let cur = candidateId
-    while (cur) {
-      if (cur === draggedId) return true
-      const parent = all.find((f) => f.id === cur)
-      cur = parent?.parentId ?? null
-    }
-    return false
-  }
-  if (targetParentId && isDescendant(targetParentId)) return
+  if (targetParentId && isDescendantOf(all, draggedId, targetParentId)) return
 
   const siblings = all
     .filter((f) => (f.parentId ?? null) === targetParentId && f.id !== draggedId)

@@ -8,6 +8,7 @@ import { useImagePages, addImagePage, deleteImagePage } from '../hooks/useImageP
 import { useAnnotation } from '../hooks/useAnnotations'
 import AnnotationLayer from './AnnotationLayer'
 import DrawingToolbar, { type DrawTool } from './DrawingToolbar'
+import Tooltip from './Tooltip'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
 interface Props {
@@ -253,15 +254,16 @@ export default function PdfViewer({ doc, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0a0a0a' }}>
       {/* Top toolbar */}
       <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-auto scroll-thin" style={{ background: '#141414' }}>
-        <button
-          onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition"
-          title="閉じる (Esc)"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M3 3l8 8M11 3l-8 8" />
-          </svg>
-        </button>
+        <Tooltip label="閉じる (Esc)">
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </Tooltip>
         <div className="flex-1 truncate text-white text-sm px-1">{doc.name}</div>
 
         <button
@@ -287,33 +289,35 @@ export default function PdfViewer({ doc, onClose }: Props) {
         <div className="w-px h-4 bg-neutral-800 mx-0.5" />
 
         {/* Insert note page */}
-        <button
-          onClick={handleInsertNote}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
-          title="ノートページを挿入"
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-            <rect x="3" y="2" width="9" height="11" rx="1.5" />
-            <path d="M5.5 5.5h4M5.5 8h2.5" />
-            <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
-          </svg>
-        </button>
+        <Tooltip label="ノート挿入">
+          <button
+            onClick={handleInsertNote}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+              <rect x="3" y="2" width="9" height="11" rx="1.5" />
+              <path d="M5.5 5.5h4M5.5 8h2.5" />
+              <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
+            </svg>
+          </button>
+        </Tooltip>
 
         {/* Insert image page */}
-        <button
-          onClick={() => imageInputRef.current?.click()}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
-          title="画像ページを挿入"
-        >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3" width="11" height="9" rx="1.5" />
-            <circle cx="5.5" cy="6" r="1.2" />
-            <path d="M2 10l3-2.5 2 1.5 2.5-2L13 10" />
-            <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
-          </svg>
-        </button>
+        <Tooltip label="画像挿入">
+          <button
+            onClick={() => imageInputRef.current?.click()}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          >
+            <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="11" height="9" rx="1.5" />
+              <circle cx="5.5" cy="6" r="1.2" />
+              <path d="M2 10l3-2.5 2 1.5 2.5-2L13 10" />
+              <circle cx="11" cy="11" r="3" fill="#141414" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M11 9.5v3M9.5 11h3" strokeWidth="1.2" />
+            </svg>
+          </button>
+        </Tooltip>
         <input
           ref={imageInputRef}
           type="file"
@@ -328,65 +332,69 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
         {/* Delete note/image page */}
         {(isNotePage || isImagePage) && (
-          <button
-            onClick={handleDeletePage}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800/60 text-red-500/70 hover:text-red-400 transition"
-            title="このページを削除"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
-              <path d="M3.5 4v7.5a1 1 0 001 1h5a1 1 0 001-1V4" />
-              <path d="M2.5 4h9" />
-              <path d="M5.5 2.5h3" />
-              <path d="M5.5 6v4M8.5 6v4" />
-            </svg>
-          </button>
+          <Tooltip label="ページ削除">
+            <button
+              onClick={handleDeletePage}
+              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800/60 text-red-500/70 hover:text-red-400 transition"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round">
+                <path d="M3.5 4v7.5a1 1 0 001 1h5a1 1 0 001-1V4" />
+                <path d="M2.5 4h9" />
+                <path d="M5.5 2.5h3" />
+                <path d="M5.5 6v4M8.5 6v4" />
+              </svg>
+            </button>
+          </Tooltip>
         )}
 
         {/* Draw mode toggle (only on PDF pages) */}
         {isPdfPage && (
-          <button
-            onClick={() => setDrawMode((v) => !v)}
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
-              drawMode
-                ? 'bg-white text-black'
-                : 'hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200'
-            }`}
-            title="ペンモード"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8.5 2.5l3 3-7.5 7.5H1v-3l7.5-7.5z" />
-              <path d="M7 4l3 3" />
-            </svg>
-          </button>
+          <Tooltip label="ペンモード">
+            <button
+              onClick={() => setDrawMode((v) => !v)}
+              className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
+                drawMode
+                  ? 'bg-white text-black'
+                  : 'hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200'
+              }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8.5 2.5l3 3-7.5 7.5H1v-3l7.5-7.5z" />
+                <path d="M7 4l3 3" />
+              </svg>
+            </button>
+          </Tooltip>
         )}
 
         <div className="w-px h-4 bg-neutral-800 mx-0.5" />
 
-        <button
-          onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
-          title="縮小"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="5.5" cy="5.5" r="3.5" />
-            <path d="M8 8l2.5 2.5" />
-            <path d="M3.5 5.5h4" />
-          </svg>
-        </button>
+        <Tooltip label="縮小">
+          <button
+            onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <circle cx="5.5" cy="5.5" r="3.5" />
+              <path d="M8 8l2.5 2.5" />
+              <path d="M3.5 5.5h4" />
+            </svg>
+          </button>
+        </Tooltip>
         <span className="text-neutral-600 tabular-nums w-10 text-center text-[11px]">
           {Math.round(zoom * 100)}%
         </span>
-        <button
-          onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
-          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
-          title="拡大"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="5.5" cy="5.5" r="3.5" />
-            <path d="M8 8l2.5 2.5" />
-            <path d="M3.5 5.5h4M5.5 3.5v4" />
-          </svg>
-        </button>
+        <Tooltip label="拡大">
+          <button
+            onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <circle cx="5.5" cy="5.5" r="3.5" />
+              <path d="M8 8l2.5 2.5" />
+              <path d="M3.5 5.5h4M5.5 3.5v4" />
+            </svg>
+          </button>
+        </Tooltip>
       </div>
 
       {/* Content area */}
