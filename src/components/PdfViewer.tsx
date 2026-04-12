@@ -274,16 +274,12 @@ export default function PdfViewer({ doc, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0a0a0a' }}>
       {/* Top toolbar */}
       <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-auto scroll-thin" style={{ background: '#141414' }}>
-        <Tooltip label="閉じる (Esc)">
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M3 3l8 8M11 3l-8 8" />
-            </svg>
-          </button>
-        </Tooltip>
+        <button
+          onClick={onClose}
+          className="px-2.5 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-neutral-800 transition text-[13px] font-medium"
+        >
+          完了
+        </button>
         <div className="flex-1 truncate text-white text-sm px-1">{doc.name}</div>
 
         <button
@@ -309,7 +305,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
         <div className="w-px h-4 bg-neutral-800 mx-0.5" />
 
         {/* Insert note page */}
-        <Tooltip label="ノート挿入">
+        <Tooltip label="ノート挿入" position="bottom">
           <button
             onClick={handleInsertNote}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
@@ -324,7 +320,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
         </Tooltip>
 
         {/* Insert image page */}
-        <Tooltip label="画像挿入">
+        <Tooltip label="画像挿入" position="bottom">
           <button
             onClick={() => imageInputRef.current?.click()}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
@@ -352,7 +348,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
         {/* Delete note/image page */}
         {(isNotePage || isImagePage) && (
-          <Tooltip label="ページ削除">
+          <Tooltip label="ページ削除" position="bottom">
             <button
               onClick={handleDeletePage}
               className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800/60 text-red-500/70 hover:text-red-400 transition"
@@ -370,14 +366,14 @@ export default function PdfViewer({ doc, onClose }: Props) {
         {/* Undo / Redo (only on PDF pages) */}
         {isPdfPage && (
           <>
-            <Tooltip label="元に戻す (⌘Z)">
+            <Tooltip label="元に戻す (⌘Z)" position="bottom">
               <button
                 onClick={undo}
                 disabled={!canUndo}
                 className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
                   canUndo
                     ? 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200'
-                    : 'text-neutral-800 cursor-default'
+                    : 'text-neutral-600 cursor-default'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -386,14 +382,14 @@ export default function PdfViewer({ doc, onClose }: Props) {
                 </svg>
               </button>
             </Tooltip>
-            <Tooltip label="やり直す (⌘⇧Z)">
+            <Tooltip label="やり直す (⌘⇧Z)" position="bottom">
               <button
                 onClick={redo}
                 disabled={!canRedo}
                 className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
                   canRedo
                     ? 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200'
-                    : 'text-neutral-800 cursor-default'
+                    : 'text-neutral-600 cursor-default'
                 }`}
               >
                 <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
@@ -407,7 +403,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
         {/* Draw mode toggle (only on PDF pages) */}
         {isPdfPage && (
-          <Tooltip label="ペンモード">
+          <Tooltip label="ペンモード" position="bottom">
             <button
               onClick={() => setDrawMode((v) => !v)}
               className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
@@ -426,7 +422,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
         <div className="w-px h-4 bg-neutral-800 mx-0.5" />
 
-        <Tooltip label="縮小">
+        <Tooltip label="縮小" position="bottom">
           <button
             onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"
@@ -441,7 +437,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
         <span className="text-neutral-600 tabular-nums w-10 text-center text-[11px]">
           {Math.round(zoom * 100)}%
         </span>
-        <Tooltip label="拡大">
+        <Tooltip label="拡大" position="bottom">
           <button
             onClick={() => setZoom((z) => Math.min(4, z + 0.2))}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200 transition"

@@ -2,10 +2,11 @@ import { useState, useRef, type ReactNode } from 'react'
 
 interface Props {
   label: string
+  position?: 'top' | 'bottom'
   children: ReactNode
 }
 
-export default function Tooltip({ label, children }: Props) {
+export default function Tooltip({ label, position = 'top', children }: Props) {
   const [show, setShow] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout>>()
 
@@ -22,7 +23,9 @@ export default function Tooltip({ label, children }: Props) {
     >
       {children}
       {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-0.5 rounded-md bg-neutral-800 border border-neutral-700/60 text-[10px] text-neutral-300 whitespace-nowrap pointer-events-none z-50 shadow-lg">
+        <div className={`absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-md bg-neutral-800 border border-neutral-700/60 text-[10px] text-neutral-300 whitespace-nowrap pointer-events-none z-50 shadow-lg ${
+          position === 'bottom' ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
+        }`}>
           {label}
         </div>
       )}
