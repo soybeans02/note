@@ -240,6 +240,16 @@ export default function PdfViewer({ doc, onClose }: Props) {
         }
         return
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault()
+        redo()
+        return
+      }
       if (e.key === 'Escape') onClose()
       else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ')
         setPage((p) => Math.min(total, p + 1))
@@ -357,6 +367,44 @@ export default function PdfViewer({ doc, onClose }: Props) {
           </Tooltip>
         )}
 
+        {/* Undo / Redo (only on PDF pages) */}
+        {isPdfPage && (
+          <>
+            <Tooltip label="元に戻す (⌘Z)">
+              <button
+                onClick={undo}
+                disabled={!canUndo}
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
+                  canUndo
+                    ? 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200'
+                    : 'text-neutral-800 cursor-default'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 5.5l-2.5 2 2.5 2" />
+                  <path d="M1.5 7.5h8a3.5 3.5 0 010 7H7" />
+                </svg>
+              </button>
+            </Tooltip>
+            <Tooltip label="やり直す (⌘⇧Z)">
+              <button
+                onClick={redo}
+                disabled={!canRedo}
+                className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
+                  canRedo
+                    ? 'text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200'
+                    : 'text-neutral-800 cursor-default'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 5.5l2.5 2-2.5 2" />
+                  <path d="M13.5 7.5h-8a3.5 3.5 0 000 7H8" />
+                </svg>
+              </button>
+            </Tooltip>
+          </>
+        )}
+
         {/* Draw mode toggle (only on PDF pages) */}
         {isPdfPage && (
           <Tooltip label="ペンモード">
@@ -462,15 +510,11 @@ export default function PdfViewer({ doc, onClose }: Props) {
           width={drawWidth}
           fontSize={textFontSize}
           bold={textBold}
-          canUndo={canUndo}
-          canRedo={canRedo}
           onToolChange={setDrawTool}
           onColorChange={setDrawColor}
           onWidthChange={setDrawWidth}
           onFontSizeChange={setTextFontSize}
           onBoldChange={setTextBold}
-          onUndo={undo}
-          onRedo={redo}
           onDone={() => setDrawMode(false)}
         />
       )}
