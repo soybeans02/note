@@ -318,9 +318,9 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const pageLabel = `${page}`
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#0a0a0a' }}>
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: '#0a0a0a' }}>
       {/* Top toolbar */}
-      <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-auto scroll-thin" style={{ background: '#141414' }}>
+      <div className="sticky top-0 z-30 flex-shrink-0 flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-auto scroll-thin" style={{ background: '#141414' }}>
         <button
           onClick={onClose}
           className="px-2.5 py-1 rounded-lg text-blue-400 hover:text-blue-300 hover:bg-neutral-800 transition text-[13px] font-medium"
