@@ -147,11 +147,15 @@ export async function createBlankNote(folderId: string | null): Promise<string> 
 
 /**
  * Reorder a document within its current folder.
- * `beforeId` = id of the doc that the dragged one should land in front of,
- * or `null` to append at the end.
+ * targetId = the doc to anchor the drop on; null = append to end.
+ * position = drop before or after the target (ignored when targetId is null).
  */
-export async function reorderDocument(draggedId: string, beforeId: string | null) {
-  if (draggedId === beforeId) return
+export async function reorderDocument(
+  draggedId: string,
+  targetId: string | null,
+  position: 'before' | 'after' = 'before',
+) {
+  if (draggedId === targetId) return
   const dragged = await db.documents.get(draggedId)
   if (!dragged) return
   const folderId = dragged.folderId ?? null
@@ -164,9 +168,9 @@ export async function reorderDocument(draggedId: string, beforeId: string | null
 
   const without = siblings.filter((d) => d.id !== draggedId)
   let insertAt = without.length
-  if (beforeId !== null) {
-    const idx = without.findIndex((d) => d.id === beforeId)
-    if (idx >= 0) insertAt = idx
+  if (targetId !== null) {
+    const idx = without.findIndex((d) => d.id === targetId)
+    if (idx >= 0) insertAt = position === 'after' ? idx + 1 : idx
   }
   without.splice(insertAt, 0, dragged)
 
