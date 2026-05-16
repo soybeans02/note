@@ -37,20 +37,28 @@ async function renderPageToImage(
   const annotation = await db.annotations.get(`${docId}-${String(pageNum)}`)
   if (annotation) {
     // Strokes
+    const baseStrokeScale = Math.min(viewport.width, viewport.height) / 500
     for (const stroke of annotation.strokes) {
+      const isHighlighter = stroke.tool === 'highlighter'
       const scaledPoints = stroke.points.map(
         ([x, y, p]) => [x * viewport.width, y * viewport.height, p] as [number, number, number],
       )
       const outlinePoints = getStroke(scaledPoints, {
-        size: stroke.width * (Math.min(viewport.width, viewport.height) / 500),
-        thinning: 0.5,
-        smoothing: 0.5,
+        size: stroke.width * baseStrokeScale,
+        thinning: isHighlighter ? 0 : 0.6,
+        smoothing: isHighlighter ? 0.4 : 0.5,
         streamline: 0.5,
-        simulatePressure: false,
+        simulatePressure: !isHighlighter,
       })
       const path = new Path2D(getSvgPathFromStroke(outlinePoints))
+      ctx.save()
+      if (isHighlighter) {
+        ctx.globalAlpha = 0.35
+        ctx.globalCompositeOperation = 'multiply'
+      }
       ctx.fillStyle = stroke.color
       ctx.fill(path)
+      ctx.restore()
     }
 
     // Text boxes

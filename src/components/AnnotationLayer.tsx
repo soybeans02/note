@@ -34,6 +34,47 @@ function getSvgPathFromStroke(points: number[][]): string {
   return `${d} Z`
 }
 
+function strokeOptions(stroke: { width: number; tool?: 'pen' | 'highlighter' }, w: number, h: number) {
+  const scale = Math.min(w, h) / 500
+  if (stroke.tool === 'highlighter') {
+    return {
+      size: stroke.width * scale,
+      thinning: 0,
+      smoothing: 0.4,
+      streamline: 0.5,
+      simulatePressure: false,
+    }
+  }
+  return {
+    size: stroke.width * scale,
+    thinning: 0.6,
+    smoothing: 0.5,
+    streamline: 0.5,
+    simulatePressure: true,
+  }
+}
+
+function drawStroke(
+  ctx: CanvasRenderingContext2D,
+  stroke: Stroke,
+  w: number,
+  h: number,
+) {
+  const scaledPoints = stroke.points.map(
+    ([x, y, p]) => [x * w, y * h, p] as [number, number, number],
+  )
+  const outlinePoints = getStroke(scaledPoints, strokeOptions(stroke, w, h))
+  const path = new Path2D(getSvgPathFromStroke(outlinePoints))
+  ctx.save()
+  if (stroke.tool === 'highlighter') {
+    ctx.globalAlpha = 0.35
+    ctx.globalCompositeOperation = 'multiply'
+  }
+  ctx.fillStyle = stroke.color
+  ctx.fill(path)
+  ctx.restore()
+}
+
 function renderStrokes(
   ctx: CanvasRenderingContext2D,
   strokes: Stroke[],
@@ -42,29 +83,19 @@ function renderStrokes(
 ) {
   ctx.clearRect(0, 0, w, h)
   for (const stroke of strokes) {
-    const scaledPoints = stroke.points.map(
-      ([x, y, p]) => [x * w, y * h, p] as [number, number, number],
-    )
-    const outlinePoints = getStroke(scaledPoints, {
-      size: stroke.width * (Math.min(w, h) / 500),
-      thinning: 0.5,
-      smoothing: 0.5,
-      streamline: 0.5,
-      simulatePressure: false,
-    })
-    const path = new Path2D(getSvgPathFromStroke(outlinePoints))
-    ctx.fillStyle = stroke.color
-    ctx.fill(path)
+    drawStroke(ctx, stroke, w, h)
   }
 }
 
 type DragState = {
-  type: 'move'
+  type: 'move' | 'resize'
   tbId: string
   startX: number
   startY: number
   origX: number
   origY: number
+  origWidth?: number
+  moved: boolean
 }
 
 export default function AnnotationLayer({
@@ -87,18 +118,34 @@ export default function AnnotationLayer({
   const pointsRef = useRef<[number, number, number][]>([])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const dragRef = useRef<DragState | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Clear editing when tool/page changes
+  // Commit any pending edit and clear selection when tool/page changes
+  const editingIdRef = useRef<string | null>(null)
+  const editingTextRef = useRef('')
+  useEffect(() => { editingIdRef.current = editingId }, [editingId])
+  useEffect(() => { editingTextRef.current = editingText }, [editingText])
   useEffect(() => {
+    const id = editingIdRef.current
+    if (id) {
+      const text = editingTextRef.current
+      if (text.trim() === '') removeTextBox(docId, pageKey, id)
+      else updateTextBox(docId, pageKey, id, { text })
+    }
     setEditingId(null)
+    setSelectedId(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageKey, tool])
 
-  // Apply toolbar style changes to editing text box
-  const activeTextBoxId = editingId
+  // Apply toolbar style changes to actively edited or selected text box
+  const activeTextBoxId = editingId ?? selectedId
+  const activeIsEditing = editingId !== null
   const prevStyleRef = useRef({ color, fontSize, bold })
   useEffect(() => {
-    if (!activeTextBoxId || tool !== 'text') return
+    if (!activeTextBoxId) return
+    if (!activeIsEditing && tool !== 'text') return
     const prev = prevStyleRef.current
     const updates: Partial<TextBox> = {}
     if (color !== prev.color) updates.color = color
@@ -108,7 +155,7 @@ export default function AnnotationLayer({
     if (Object.keys(updates).length > 0) {
       updateTextBox(docId, pageKey, activeTextBoxId, updates)
     }
-  }, [color, fontSize, bold, activeTextBoxId, tool, docId, pageKey])
+  }, [color, fontSize, bold, activeTextBoxId, activeIsEditing, tool, docId, pageKey])
 
   // Render existing strokes
   useEffect(() => {
@@ -151,7 +198,9 @@ export default function AnnotationLayer({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!interactive) return
-      if (tool === 'text') return
+      if (tool === 'text' || tool === 'hand') return
+      // Touch never draws — leaves 1-finger/2-finger gestures for scrolling
+      if (e.pointerType === 'touch') return
       e.preventDefault()
       ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
       const pt = normalizePoint(e)
@@ -176,6 +225,7 @@ export default function AnnotationLayer({
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
       if (!interactive) return
+      if (e.pointerType === 'touch') return
 
       if (tool === 'object-eraser') {
         if (e.buttons > 0) {
@@ -206,19 +256,14 @@ export default function AnnotationLayer({
       const w = canvas.width
       const h = canvas.height
       renderStrokes(ctx, strokes, w, h)
-      const scaledPoints = pointsRef.current.map(
-        ([x, y, p]) => [x * w, y * h, p] as [number, number, number],
-      )
-      const outlinePoints = getStroke(scaledPoints, {
-        size: width * (Math.min(w, h) / 500),
-        thinning: 0.5,
-        smoothing: 0.5,
-        streamline: 0.5,
-        simulatePressure: false,
-      })
-      const path = new Path2D(getSvgPathFromStroke(outlinePoints))
-      ctx.fillStyle = color
-      ctx.fill(path)
+      const liveStroke: Stroke = {
+        id: '',
+        points: pointsRef.current,
+        color,
+        width,
+        tool: tool === 'highlighter' ? 'highlighter' : 'pen',
+      }
+      drawStroke(ctx, liveStroke, w, h)
     },
     [interactive, tool, docId, pageKey, normalizePoint, findStrokeAt, strokes, color, width],
   )
@@ -232,10 +277,11 @@ export default function AnnotationLayer({
       points: pointsRef.current,
       color,
       width,
+      tool: tool === 'highlighter' ? 'highlighter' : 'pen',
     }
     pointsRef.current = []
     addStroke(docId, pageKey, stroke)
-  }, [docId, pageKey, color, width])
+  }, [docId, pageKey, color, width, tool])
 
   // Commit text edit
   const commitTextEdit = useCallback(
@@ -274,42 +320,93 @@ export default function AnnotationLayer({
     [interactive, tool, color, fontSize, bold, docId, pageKey, editingId, editingText, commitTextEdit],
   )
 
-  // Click on background to commit edit
+  // Click on background to commit edit / deselect
   const handleBgClick = useCallback(() => {
-    if (editingId) {
-      commitTextEdit(editingId, editingText)
-    }
-  }, [editingId, editingText, commitTextEdit])
+    if (editingId) commitTextEdit(editingId, editingText)
+    if (selectedId) setSelectedId(null)
+  }, [editingId, editingText, commitTextEdit, selectedId])
 
   // Drag move/resize handlers (attached to window)
   useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
+    const DRAG_THRESHOLD = 3
+    const onMove = (e: MouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
+      const totalDx = e.clientX - drag.startX
+      const totalDy = e.clientY - drag.startY
+      if (!drag.moved && Math.abs(totalDx) < DRAG_THRESHOLD && Math.abs(totalDy) < DRAG_THRESHOLD) return
+      drag.moved = true
       e.preventDefault()
-      const dx = (e.clientX - drag.startX) / canvasWidth
-      const dy = (e.clientY - drag.startY) / canvasHeight
-
-      const newX = Math.max(0, Math.min(1, drag.origX + dx))
-      const newY = Math.max(0, Math.min(1, drag.origY + dy))
-      updateTextBox(docId, pageKey, drag.tbId, { x: newX, y: newY })
+      if (drag.type === 'move') {
+        const newX = Math.max(0, Math.min(1, drag.origX + totalDx / canvasWidth))
+        const newY = Math.max(0, Math.min(1, drag.origY + totalDy / canvasHeight))
+        updateTextBox(docId, pageKey, drag.tbId, { x: newX, y: newY })
+      } else if (drag.type === 'resize' && drag.origWidth !== undefined) {
+        const newW = Math.max(0.05, Math.min(1, drag.origWidth + totalDx / canvasWidth))
+        updateTextBox(docId, pageKey, drag.tbId, { width: newW })
+      }
     }
-
-    const onMouseUp = () => {
-      dragRef.current = null
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
+    const onUp = () => { dragRef.current = null }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
     return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
     }
   }, [docId, pageKey, canvasWidth, canvasHeight])
+
+  // Keyboard: Delete/Backspace removes selected box (when not editing)
+  useEffect(() => {
+    if (!selectedId || editingId) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault()
+        removeTextBox(docId, pageKey, selectedId)
+        setSelectedId(null)
+      } else if (e.key === 'Escape') {
+        setSelectedId(null)
+      } else if (e.key === 'Enter' || e.key === 'F2') {
+        const tb = textBoxes.find((t) => t.id === selectedId)
+        if (tb) {
+          e.preventDefault()
+          setEditingId(tb.id)
+          setEditingText(tb.text)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedId, editingId, docId, pageKey, textBoxes])
+
+  // Auto-grow editing textarea
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+  }, [editingText, editingId])
+
+  // Click outside to deselect/commit (window-level)
+  useEffect(() => {
+    if (!selectedId && !editingId) return
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-textbox]')) return
+      if (target.closest('[data-text-overlay]')) return
+      if (editingId) commitTextEdit(editingId, editingText)
+      else if (selectedId) setSelectedId(null)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    return () => window.removeEventListener('mousedown', onMouseDown)
+  }, [selectedId, editingId, editingText, commitTextEdit])
 
   const dpr = window.devicePixelRatio || 1
   const isTextTool = tool === 'text'
   const scale = Math.min(canvasWidth, canvasHeight) / 500
+
+  const textBoxClickable = interactive && (tool === 'hand' || tool === 'text' || tool === 'object-eraser')
+  const isHandTool = tool === 'hand'
 
   return (
     <div
@@ -320,7 +417,7 @@ export default function AnnotationLayer({
         left: 0,
         width: canvasWidth,
         height: canvasHeight,
-        pointerEvents: interactive ? 'auto' : 'none',
+        pointerEvents: 'none',
       }}
     >
       {/* Stroke canvas */}
@@ -335,9 +432,10 @@ export default function AnnotationLayer({
           left: 0,
           width: canvasWidth,
           height: canvasHeight,
-          pointerEvents: interactive && !isTextTool ? 'auto' : 'none',
-          cursor: interactive && !isTextTool ? 'crosshair' : 'default',
-          touchAction: interactive && !isTextTool ? 'none' : 'auto',
+          pointerEvents: interactive && !isTextTool && !isHandTool ? 'auto' : 'none',
+          cursor: interactive && !isTextTool && !isHandTool ? 'crosshair' : 'default',
+          // Touch always scrolls — pen/mouse always draw. Pointer events still fire for pen.
+          touchAction: 'auto',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -348,105 +446,115 @@ export default function AnnotationLayer({
       {/* Text boxes */}
       {textBoxes.map((tb) => {
         const isEditing = editingId === tb.id
+        const isSelected = selectedId === tb.id
         const left = tb.x * canvasWidth
         const top = tb.y * canvasHeight
         const fs = tb.fontSize * scale
         const tbWidth = tb.width ? tb.width * canvasWidth : undefined
+        const padding = Math.max(2, fs * 0.15)
 
         if (isEditing) {
           return (
             <div
               key={tb.id}
+              data-textbox={tb.id}
               style={{
                 position: 'absolute',
                 left,
                 top,
                 zIndex: 10,
-                minWidth: 80,
+                pointerEvents: 'auto',
               }}
             >
-              {/* Drag handle */}
-              <div
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  dragRef.current = {
-                    type: 'move',
-                    tbId: tb.id,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: tb.x,
-                    origY: tb.y,
-                  }
-                }}
-                style={{
-                  height: 14,
-                  background: '#3b82f6',
-                  borderRadius: '4px 4px 0 0',
-                  cursor: 'move',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <svg width="20" height="4" viewBox="0 0 20 4" fill="rgba(255,255,255,0.6)">
-                  <circle cx="6" cy="2" r="1" />
-                  <circle cx="10" cy="2" r="1" />
-                  <circle cx="14" cy="2" r="1" />
-                </svg>
-              </div>
               <textarea
+                ref={textareaRef}
                 autoFocus
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
                 onBlur={() => commitTextEdit(tb.id, editingText)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape') commitTextEdit(tb.id, editingText)
+                  if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && e.key === 'Enter')) {
+                    e.preventDefault()
+                    commitTextEdit(tb.id, editingText)
+                  }
                   e.stopPropagation()
                 }}
                 style={{
                   display: 'block',
-                  width: tbWidth ?? '100%',
+                  width: tbWidth ?? Math.max(120, fs * 6),
                   fontSize: fs,
                   fontWeight: tb.bold ? 700 : 400,
                   color: tb.color,
-                  minWidth: 80,
-                  minHeight: fs + 8,
-                  background: 'rgba(255,255,255,0.95)',
-                  border: '1.5px solid #3b82f6',
-                  borderTop: 'none',
-                  borderRadius: '0 0 4px 4px',
-                  padding: '2px 4px',
+                  minHeight: fs * 1.4 + padding * 2,
+                  background: 'rgba(255,255,255,0.92)',
+                  border: '1.5px dashed #3b82f6',
+                  borderRadius: 4,
+                  padding: `${padding}px ${padding * 1.5}px`,
                   outline: 'none',
-                  resize: 'both',
+                  resize: 'none',
+                  overflow: 'hidden',
                   lineHeight: 1.4,
                   fontFamily: 'sans-serif',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
           )
         }
 
+        const startDrag = (e: React.MouseEvent, type: 'move' | 'resize') => {
+          e.preventDefault()
+          e.stopPropagation()
+          dragRef.current = {
+            type,
+            tbId: tb.id,
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: tb.x,
+            origY: tb.y,
+            origWidth: tb.width,
+            moved: false,
+          }
+        }
+
         return (
           <div
             key={tb.id}
+            data-textbox={tb.id}
+            onMouseDown={(e) => {
+              if (!textBoxClickable) return
+              if (tool === 'object-eraser') return
+              startDrag(e, 'move')
+              setSelectedId(tb.id)
+            }}
             onClick={(e) => {
-              if (!interactive) return
+              if (!textBoxClickable) return
               e.stopPropagation()
-
+              const dragMoved = dragRef.current?.moved
+              if (dragMoved) return
               if (tool === 'object-eraser') {
                 removeTextBox(docId, pageKey, tb.id)
                 return
               }
-
-              // Single click → edit directly
+              if (tool === 'text') {
+                setEditingId(tb.id)
+                setEditingText(tb.text)
+                setSelectedId(null)
+              }
+            }}
+            onDoubleClick={(e) => {
+              if (!textBoxClickable) return
+              if (tool === 'object-eraser') return
+              e.stopPropagation()
               setEditingId(tb.id)
               setEditingText(tb.text)
+              setSelectedId(null)
             }}
             style={{
               position: 'absolute',
-              left,
-              top,
-              width: tbWidth,
+              left: left - padding * 1.5,
+              top: top - padding,
+              width: tbWidth !== undefined ? tbWidth + padding * 3 : undefined,
               fontSize: fs,
               fontWeight: tb.bold ? 700 : 400,
               color: tb.color,
@@ -454,18 +562,39 @@ export default function AnnotationLayer({
               wordBreak: tbWidth ? 'break-word' : undefined,
               lineHeight: 1.4,
               fontFamily: 'sans-serif',
-              cursor: interactive
+              cursor: textBoxClickable
                 ? tool === 'object-eraser'
                   ? 'crosshair'
-                  : 'pointer'
+                  : 'move'
                 : 'default',
-              pointerEvents: interactive ? 'auto' : 'none',
+              pointerEvents: textBoxClickable ? 'auto' : 'none',
               userSelect: 'none',
-              borderRadius: 3,
-              padding: '1px 3px',
+              borderRadius: 4,
+              padding: `${padding}px ${padding * 1.5}px`,
+              border: isSelected ? '1.5px dashed #3b82f6' : '1.5px solid transparent',
+              boxSizing: 'border-box',
+              background: isSelected ? 'rgba(59,130,246,0.04)' : undefined,
             }}
           >
             {tb.text}
+            {isSelected && (
+              <div
+                onMouseDown={(e) => startDrag(e, 'resize')}
+                style={{
+                  position: 'absolute',
+                  right: -6,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: 10,
+                  height: 28,
+                  borderRadius: 4,
+                  background: '#3b82f6',
+                  cursor: 'ew-resize',
+                  border: '2px solid white',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                }}
+              />
+            )}
           </div>
         )
       })}
@@ -473,6 +602,7 @@ export default function AnnotationLayer({
       {/* Click overlay for text tool — behind text boxes but above canvas */}
       {interactive && isTextTool && (
         <div
+          data-text-overlay
           onClick={handleTextClick}
           style={{
             position: 'absolute',
@@ -481,6 +611,7 @@ export default function AnnotationLayer({
             width: canvasWidth,
             height: canvasHeight,
             cursor: 'text',
+            pointerEvents: 'auto',
             zIndex: 0,
           }}
         />

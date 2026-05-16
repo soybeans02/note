@@ -32,6 +32,7 @@ export interface Stroke {
   points: [number, number, number][] // [x, y, pressure] 0-1 normalized
   color: string
   width: number
+  tool?: 'pen' | 'highlighter'
 }
 
 export interface TextBox {

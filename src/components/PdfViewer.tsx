@@ -22,14 +22,18 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null)
   const [page, setPage] = useState(1)
   const [zoom, setZoom] = useState(1.2)
-  const [drawMode, setDrawMode] = useState(false)
-  const [drawTool, setDrawTool] = useState<DrawTool>('pen')
+  const [drawTool, setDrawTool] = useState<DrawTool>('hand')
   const [drawColor, setDrawColor] = useState('#000000')
-  const [drawWidth, setDrawWidth] = useState(4)
+  const [drawWidth, setDrawWidth] = useState(3)
+  const [highlighterColor, setHighlighterColor] = useState('#fde047')
+  const [highlighterWidth, setHighlighterWidth] = useState(18)
   const [textFontSize, setTextFontSize] = useState(16)
   const [textBold, setTextBold] = useState(false)
   const [canvasDims, setCanvasDims] = useState({ w: 0, h: 0 })
   const [exporting, setExporting] = useState(false)
+
+  const activeColor = drawTool === 'highlighter' ? highlighterColor : drawColor
+  const activeWidth = drawTool === 'highlighter' ? highlighterWidth : drawWidth
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -276,21 +280,8 @@ export default function PdfViewer({ doc, onClose }: Props) {
   // Keyboard nav
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isNotePage && e.target instanceof HTMLTextAreaElement) {
-        if (e.key === 'Escape') onClose()
-        return
-      }
-      if (drawMode) {
-        if (e.target instanceof HTMLTextAreaElement) return
-        if (e.key === 'Escape') setDrawMode(false)
-        if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-          e.preventDefault()
-          undo()
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
-          e.preventDefault()
-          redo()
-        }
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        if (e.key === 'Escape' && isNotePage) onClose()
         return
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
@@ -303,8 +294,18 @@ export default function PdfViewer({ doc, onClose }: Props) {
         redo()
         return
       }
+      // Single-key tool shortcuts (only when not drawing-interactive on text)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && (isPdfPage || isImagePage)) {
+        if (e.key === 'p') { setDrawTool('pen'); return }
+        if (e.key === 'h') { setDrawTool('highlighter'); return }
+        if (e.key === 'e') { setDrawTool('trace-eraser'); return }
+        if (e.key === 't') { setDrawTool('text'); return }
+        if (e.key === 'v' || e.key === 'Escape') {
+          if (drawTool !== 'hand') { setDrawTool('hand'); return }
+        }
+      }
       if (e.key === 'Escape') onClose()
-      else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ')
+      else if (e.key === 'ArrowRight' || e.key === 'PageDown')
         setPage((p) => Math.min(total, p + 1))
       else if (e.key === 'ArrowLeft' || e.key === 'PageUp')
         setPage((p) => Math.max(1, p - 1))
@@ -313,7 +314,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [total, isNotePage, drawMode, onClose, undo, redo])
+  }, [total, isNotePage, isPdfPage, isImagePage, drawTool, onClose, undo, redo])
 
   const pageLabel = `${page}`
 
@@ -321,7 +322,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden" style={{ background: '#0a0a0a' }}>
       {/* Top toolbar */}
       <div
-        className="sticky top-0 z-30 flex-shrink-0 flex items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px] whitespace-nowrap overflow-x-hidden"
+        className="sticky top-0 z-30 flex-shrink-0 flex flex-wrap items-center gap-1.5 md:gap-2 px-2 md:px-3 py-1.5 border-b border-neutral-800/50 text-[13px]"
         style={{ background: '#141414' }}
       >
         <button
@@ -477,25 +478,6 @@ export default function PdfViewer({ doc, onClose }: Props) {
           </>
         )}
 
-        {/* Draw mode toggle */}
-        {(isPdfPage || isImagePage) && (
-          <Tooltip label="ペンモード" position="bottom">
-            <button
-              onClick={() => setDrawMode((v) => !v)}
-              className={`w-7 h-7 flex items-center justify-center rounded-md transition ${
-                drawMode
-                  ? 'bg-white text-black'
-                  : 'hover:bg-neutral-800 text-neutral-500 hover:text-neutral-200'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8.5 2.5l3 3-7.5 7.5H1v-3l7.5-7.5z" />
-                <path d="M7 4l3 3" />
-              </svg>
-            </button>
-          </Tooltip>
-        )}
-
         <div className="w-px h-4 bg-neutral-800 mx-0.5" />
 
         <Tooltip label="縮小" position="bottom">
@@ -560,7 +542,13 @@ export default function PdfViewer({ doc, onClose }: Props) {
       </div>
 
       {/* Content area */}
-      <div className="flex-1 overflow-auto scroll-thin flex items-start justify-center p-3 md:p-6 relative">
+      <div
+        className="flex-1 overflow-auto scroll-thin flex items-start justify-center p-3 md:p-6 relative"
+        style={{
+          overscrollBehavior: 'none',
+          paddingBottom: isPdfPage || isImagePage ? 120 : undefined,
+        }}
+      >
         {isNotePage ? (
           <NotePageView
             notePageId={currentEntry.notePageId}
@@ -576,10 +564,10 @@ export default function PdfViewer({ doc, onClose }: Props) {
             pageKey={annotationPageKey}
             strokes={strokes}
             textBoxes={textBoxes}
-            drawMode={drawMode}
+            interactive={true}
             drawTool={drawTool}
-            drawColor={drawColor}
-            drawWidth={drawWidth}
+            drawColor={activeColor}
+            drawWidth={activeWidth}
             textFontSize={textFontSize}
             textBold={textBold}
           />
@@ -592,10 +580,10 @@ export default function PdfViewer({ doc, onClose }: Props) {
                 pageKey={annotationPageKey}
                 strokes={strokes}
                 textBoxes={textBoxes}
-                interactive={drawMode}
+                interactive={true}
                 tool={drawTool}
-                color={drawColor}
-                width={drawWidth}
+                color={activeColor}
+                width={activeWidth}
                 fontSize={textFontSize}
                 bold={textBold}
                 canvasWidth={canvasDims.w}
@@ -618,20 +606,23 @@ export default function PdfViewer({ doc, onClose }: Props) {
         )}
       </div>
 
-      {/* Drawing toolbar */}
-      {drawMode && (isPdfPage || isImagePage) && (
+      {/* Drawing toolbar — always shown on PDF/image pages */}
+      {(isPdfPage || isImagePage) && (
         <DrawingToolbar
           tool={drawTool}
           color={drawColor}
           width={drawWidth}
+          highlighterColor={highlighterColor}
+          highlighterWidth={highlighterWidth}
           fontSize={textFontSize}
           bold={textBold}
           onToolChange={setDrawTool}
           onColorChange={setDrawColor}
           onWidthChange={setDrawWidth}
+          onHighlighterColorChange={setHighlighterColor}
+          onHighlighterWidthChange={setHighlighterWidth}
           onFontSizeChange={setTextFontSize}
           onBoldChange={setTextBold}
-          onDone={() => setDrawMode(false)}
         />
       )}
     </div>
@@ -691,7 +682,7 @@ function ImagePageView({
   pageKey,
   strokes,
   textBoxes,
-  drawMode,
+  interactive,
   drawTool,
   drawColor,
   drawWidth,
@@ -703,7 +694,7 @@ function ImagePageView({
   pageKey: string
   strokes: Stroke[]
   textBoxes: TextBox[]
-  drawMode: boolean
+  interactive: boolean
   drawTool: DrawTool
   drawColor: string
   drawWidth: number
@@ -743,7 +734,7 @@ function ImagePageView({
           pageKey={pageKey}
           strokes={strokes}
           textBoxes={textBoxes}
-          interactive={drawMode}
+          interactive={interactive}
           tool={drawTool}
           color={drawColor}
           width={drawWidth}
