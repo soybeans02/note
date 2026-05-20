@@ -1,6 +1,24 @@
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { downloadBlob, exportAll, importAll } from '../lib/backup'
+
+function useOnline() {
+  const [online, setOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine,
+  )
+  useEffect(() => {
+    const up = () => setOnline(true)
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
+  return online
+}
 
 interface Props {
   search: string
@@ -18,6 +36,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function Toolbar({ search, onSearch, folderLabel, isMobile, onMenuToggle }: Props) {
+  const online = useOnline()
   const stats = useLiveQuery(
     async () => {
       const docs = await db.documents.toArray()
@@ -56,6 +75,19 @@ export default function Toolbar({ search, onSearch, folderLabel, isMobile, onMen
         />
       </div>
       <div className="flex-1" />
+      {!online && (
+        <div
+          title="オフライン中 — 操作はすべてローカルで完結します"
+          className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 shrink-0"
+        >
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+            <path d="M1 4l10 4M2.5 6.5l7 2.8" />
+            <circle cx="6" cy="10" r="0.6" fill="currentColor" stroke="none" />
+            <path d="M1.5 1.5l9 9" />
+          </svg>
+          <span>オフライン</span>
+        </div>
+      )}
       {!isMobile && stats.count > 0 && (
         <div className="text-[11px] text-neutral-600 shrink-0">
           {stats.count}件 · {formatBytes(stats.total)}
