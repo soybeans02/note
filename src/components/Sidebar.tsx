@@ -7,7 +7,28 @@ import {
   reorderFolder,
   useAllFolders,
 } from '../hooks/useFolders'
-import { moveDocument } from '../hooks/useDocuments'
+import { moveDocument, moveDocuments } from '../hooks/useDocuments'
+
+const DOC_ID_MIME = 'application/x-doc-id'
+const DOC_IDS_MIME = 'application/x-doc-ids'
+
+function getDocIds(dt: DataTransfer): string[] {
+  const multi = dt.getData(DOC_IDS_MIME)
+  if (multi) {
+    try {
+      const arr = JSON.parse(multi)
+      if (Array.isArray(arr) && arr.every((x) => typeof x === 'string')) return arr
+    } catch {
+      /* ignore */
+    }
+  }
+  const one = dt.getData(DOC_ID_MIME)
+  return one ? [one] : []
+}
+
+function hasDocPayload(types: ReadonlyArray<string>): boolean {
+  return types.includes(DOC_ID_MIME) || types.includes(DOC_IDS_MIME)
+}
 
 interface Props {
   selectedFolderId: string | null
@@ -70,23 +91,23 @@ function RootRow({ selected, onSelect }: { selected: boolean; onSelect: () => vo
     <div
       onClick={onSelect}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes('application/x-doc-id')) return
+        if (!hasDocPayload(e.dataTransfer.types)) return
         e.preventDefault()
         setHover(true)
       }}
       onDragLeave={() => setHover(false)}
       onDrop={(e) => {
-        const docId = e.dataTransfer.getData('application/x-doc-id')
-        if (!docId) return
+        const ids = getDocIds(e.dataTransfer)
+        if (!ids.length) return
         e.preventDefault()
         setHover(false)
-        moveDocument(docId, null)
+        moveDocuments(ids, null)
       }}
       className={`px-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-2.5 mb-0.5 transition ${
         selected
           ? 'bg-white/10 text-white font-medium'
           : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
-      } ${hover ? 'ring-1 ring-neutral-600' : ''}`}
+      } ${hover ? 'bg-blue-500/15 ring-2 ring-blue-500/60 text-blue-100' : ''}`}
     >
       <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.3" className="shrink-0 opacity-60">
         <rect x="2" y="3" width="11" height="9" rx="1.5" />
@@ -113,7 +134,7 @@ function FolderRow({
 
   const computeZone = (e: React.DragEvent<HTMLDivElement>): DropZone => {
     // Docs always drop INTO the folder (no reorder for docs in sidebar).
-    if (e.dataTransfer.types.includes('application/x-doc-id')) return 'doc-into'
+    if (hasDocPayload(e.dataTransfer.types)) return 'doc-into'
     // Folders only reorder — never nest.
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
@@ -130,7 +151,7 @@ function FolderRow({
       onDragOver={(e) => {
         if (
           !e.dataTransfer.types.includes('application/x-folder-id') &&
-          !e.dataTransfer.types.includes('application/x-doc-id')
+          !hasDocPayload(e.dataTransfer.types)
         )
           return
         e.preventDefault()
@@ -141,9 +162,10 @@ function FolderRow({
         e.preventDefault()
         const dropZone = computeZone(e)
         setZone(null)
-        const docId = e.dataTransfer.getData('application/x-doc-id')
-        if (docId) {
-          moveDocument(docId, node.id)
+        const docIds = getDocIds(e.dataTransfer)
+        if (docIds.length) {
+          if (docIds.length === 1) moveDocument(docIds[0], node.id)
+          else moveDocuments(docIds, node.id)
           return
         }
         const folderId = e.dataTransfer.getData('application/x-folder-id')
@@ -173,7 +195,7 @@ function FolderRow({
         selected
           ? 'bg-white/10 text-white font-medium'
           : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
-      } ${zone === 'doc-into' ? 'ring-1 ring-neutral-600' : ''}`}
+      } ${zone === 'doc-into' ? 'bg-blue-500/15 ring-2 ring-blue-500/60 text-blue-100' : ''}`}
     >
       {zone === 'before' && (
         <span className="absolute left-2 right-2 top-0 h-0.5 bg-neutral-500 rounded pointer-events-none" />

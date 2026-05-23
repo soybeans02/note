@@ -126,6 +126,18 @@ export async function moveDocument(id: string, folderId: string | null) {
   await db.documents.update(id, { folderId, order, updatedAt: Date.now() })
 }
 
+export async function moveDocuments(ids: string[], folderId: string | null) {
+  if (!ids.length) return
+  await db.transaction('rw', db.documents, async () => {
+    let order = await nextOrderInFolder(folderId)
+    const now = Date.now()
+    for (const id of ids) {
+      await db.documents.update(id, { folderId, order, updatedAt: now })
+      order += 1
+    }
+  })
+}
+
 export async function createBlankNote(folderId: string | null): Promise<string> {
   const id = uid()
   const now = Date.now()
