@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type Folder } from '../db/db'
 import {
   createFolder,
   deleteFolder,
+  moveFolder,
   renameFolder,
   reorderFolder,
   useAllFolders,
 } from '../hooks/useFolders'
 import { moveDocument, moveDocuments } from '../hooks/useDocuments'
+import { pickFolder } from '../lib/folderPath'
 
 const DOC_ID_MIME = 'application/x-doc-id'
 const DOC_IDS_MIME = 'application/x-doc-ids'
+const FOLDER_ID_MIME = 'application/x-folder-id'
 
 function getDocIds(dt: DataTransfer): string[] {
   const multi = dt.getData(DOC_IDS_MIME)
@@ -30,18 +33,78 @@ function hasDocPayload(types: ReadonlyArray<string>): boolean {
   return types.includes(DOC_ID_MIME) || types.includes(DOC_IDS_MIME)
 }
 
+interface TreeNode extends Folder {
+  children: TreeNode[]
+}
+
+function buildTree(folders: Folder[]): TreeNode[] {
+  const map = new Map<string, TreeNode>()
+  folders.forEach((f) => map.set(f.id, { ...f, children: [] }))
+  const roots: TreeNode[] = []
+  for (const node of map.values()) {
+    if (node.parentId && map.has(node.parentId)) {
+      map.get(node.parentId)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+  const sortRec = (nodes: TreeNode[]) => {
+    nodes.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    nodes.forEach((n) => sortRec(n.children))
+  }
+  sortRec(roots)
+  return roots
+}
+
 interface Props {
   selectedFolderId: string | null
   onSelect: (folderId: string | null) => void
 }
 
+const EXPANDED_KEY = 'note:folders-expanded'
+
+function useExpandedSet(): {
+  isOpen: (id: string) => boolean
+  toggle: (id: string) => void
+  open: (id: string) => void
+} {
+  const [openIds, setOpenIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const stored = window.localStorage.getItem(EXPANDED_KEY)
+      if (!stored) return new Set()
+      const arr = JSON.parse(stored)
+      return new Set(Array.isArray(arr) ? arr : [])
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => {
+    window.localStorage.setItem(EXPANDED_KEY, JSON.stringify([...openIds]))
+  }, [openIds])
+  return {
+    isOpen: (id) => openIds.has(id),
+    toggle: (id) =>
+      setOpenIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      }),
+    open: (id) =>
+      setOpenIds((prev) => {
+        if (prev.has(id)) return prev
+        const next = new Set(prev)
+        next.add(id)
+        return next
+      }),
+  }
+}
+
 export default function Sidebar({ selectedFolderId, onSelect }: Props) {
   const folders = useAllFolders()
-  // Flat, order-sorted list (parentId is ignored — no nesting in the UI).
-  const flatFolders = useMemo(
-    () => [...folders].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-    [folders],
-  )
+  const tree = useMemo(() => buildTree(folders), [folders])
+  const expanded = useExpandedSet()
 
   return (
     <aside className="w-64 md:w-56 h-full shrink-0 border-r border-neutral-800/50 bg-[#141414] flex flex-col">
@@ -68,12 +131,15 @@ export default function Sidebar({ selectedFolderId, onSelect }: Props) {
           selected={selectedFolderId === null}
           onSelect={() => onSelect(null)}
         />
-        {flatFolders.map((node) => (
+        {tree.map((node) => (
           <FolderRow
             key={node.id}
             node={node}
+            depth={0}
+            allFolders={folders}
             selectedFolderId={selectedFolderId}
             onSelect={onSelect}
+            expanded={expanded}
           />
         ))}
       </div>
@@ -91,17 +157,22 @@ function RootRow({ selected, onSelect }: { selected: boolean; onSelect: () => vo
     <div
       onClick={onSelect}
       onDragOver={(e) => {
-        if (!hasDocPayload(e.dataTransfer.types)) return
+        const isFolder = e.dataTransfer.types.includes(FOLDER_ID_MIME)
+        if (!hasDocPayload(e.dataTransfer.types) && !isFolder) return
         e.preventDefault()
         setHover(true)
       }}
       onDragLeave={() => setHover(false)}
       onDrop={(e) => {
-        const ids = getDocIds(e.dataTransfer)
-        if (!ids.length) return
         e.preventDefault()
         setHover(false)
-        moveDocuments(ids, null)
+        const docIds = getDocIds(e.dataTransfer)
+        if (docIds.length) {
+          moveDocuments(docIds, null)
+          return
+        }
+        const folderId = e.dataTransfer.getData(FOLDER_ID_MIME)
+        if (folderId) moveFolder(folderId, null)
       }}
       className={`px-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-2.5 mb-0.5 transition ${
         selected
@@ -118,96 +189,166 @@ function RootRow({ selected, onSelect }: { selected: boolean; onSelect: () => vo
   )
 }
 
-type DropZone = 'before' | 'doc-into' | 'after'
+type DropZone = 'before' | 'into' | 'after' | 'doc-into'
+
+interface ExpandedAPI {
+  isOpen: (id: string) => boolean
+  toggle: (id: string) => void
+  open: (id: string) => void
+}
 
 function FolderRow({
   node,
+  depth,
+  allFolders,
   selectedFolderId,
   onSelect,
+  expanded,
 }: {
-  node: Folder
+  node: TreeNode
+  depth: number
+  allFolders: Folder[]
   selectedFolderId: string | null
   onSelect: (id: string | null) => void
+  expanded: ExpandedAPI
 }) {
   const [zone, setZone] = useState<DropZone | null>(null)
   const selected = selectedFolderId === node.id
+  const open = expanded.isOpen(node.id)
+
+  // Auto-expand when a drag hovers over this folder long enough — easier
+  // to drop deep into the tree.
+  useEffect(() => {
+    if (zone !== 'into' && zone !== 'doc-into') return
+    if (open) return
+    const t = setTimeout(() => expanded.open(node.id), 600)
+    return () => clearTimeout(t)
+  }, [zone, open, expanded, node.id])
 
   const computeZone = (e: React.DragEvent<HTMLDivElement>): DropZone => {
-    // Docs always drop INTO the folder (no reorder for docs in sidebar).
+    // Docs always drop INTO the folder.
     if (hasDocPayload(e.dataTransfer.types)) return 'doc-into'
-    // Folders only reorder — never nest.
+    // Folder drag: split into before / into / after by Y position.
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
-    return y < rect.height / 2 ? 'before' : 'after'
+    const ratio = y / rect.height
+    if (ratio < 0.3) return 'before'
+    if (ratio > 0.7) return 'after'
+    return 'into'
   }
 
   return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/x-folder-id', node.id)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      onDragOver={(e) => {
-        if (
-          !e.dataTransfer.types.includes('application/x-folder-id') &&
-          !hasDocPayload(e.dataTransfer.types)
-        )
-          return
-        e.preventDefault()
-        setZone(computeZone(e))
-      }}
-      onDragLeave={() => setZone(null)}
-      onDrop={(e) => {
-        e.preventDefault()
-        const dropZone = computeZone(e)
-        setZone(null)
-        const docIds = getDocIds(e.dataTransfer)
-        if (docIds.length) {
-          if (docIds.length === 1) moveDocument(docIds[0], node.id)
-          else moveDocuments(docIds, node.id)
-          return
-        }
-        const folderId = e.dataTransfer.getData('application/x-folder-id')
-        if (!folderId || folderId === node.id) return
-        if (dropZone === 'before' || dropZone === 'after') {
-          reorderFolder(folderId, node.id, dropZone)
-        }
-      }}
-      onClick={() => onSelect(node.id)}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        const action = prompt(
-          `「${node.name}」\n1: リネーム\n2: 削除\n番号を入力`,
-        )
-        if (action === '1') {
-          const name = prompt('新しい名前', node.name)
-          if (name) renameFolder(node.id, name)
-        } else if (action === '2') {
-          if (confirm(`「${node.name}」と中身をすべて削除しますか？`)) {
-            deleteFolder(node.id)
-            if (selected) onSelect(null)
+    <div>
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(FOLDER_ID_MIME, node.id)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragOver={(e) => {
+          if (
+            !e.dataTransfer.types.includes(FOLDER_ID_MIME) &&
+            !hasDocPayload(e.dataTransfer.types)
+          )
+            return
+          e.preventDefault()
+          setZone(computeZone(e))
+        }}
+        onDragLeave={() => setZone(null)}
+        onDrop={(e) => {
+          e.preventDefault()
+          const dropZone = computeZone(e)
+          setZone(null)
+          const docIds = getDocIds(e.dataTransfer)
+          if (docIds.length) {
+            if (docIds.length === 1) moveDocument(docIds[0], node.id)
+            else moveDocuments(docIds, node.id)
+            return
           }
-        }
-      }}
-      style={{ paddingLeft: 12 }}
-      className={`relative pr-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-1.5 select-none mb-0.5 transition ${
-        selected
-          ? 'bg-white/10 text-white font-medium'
-          : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
-      } ${zone === 'doc-into' ? 'bg-blue-500/15 ring-2 ring-blue-500/60 text-blue-100' : ''}`}
-    >
-      {zone === 'before' && (
-        <span className="absolute left-2 right-2 top-0 h-0.5 bg-neutral-500 rounded pointer-events-none" />
-      )}
-      {zone === 'after' && (
-        <span className="absolute left-2 right-2 bottom-0 h-0.5 bg-neutral-500 rounded pointer-events-none" />
-      )}
-      <span className="w-4" />
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" className="shrink-0 opacity-50">
-        <path d="M2 4.5V11a1 1 0 001 1h8a1 1 0 001-1V6a1 1 0 00-1-1H7L5.5 3H3a1 1 0 00-1 1v.5z" />
-      </svg>
-      <span className="truncate">{node.name}</span>
+          const folderId = e.dataTransfer.getData(FOLDER_ID_MIME)
+          if (!folderId || folderId === node.id) return
+          if (dropZone === 'into') {
+            moveFolder(folderId, node.id)
+            expanded.open(node.id)
+          } else if (dropZone === 'before' || dropZone === 'after') {
+            reorderFolder(folderId, node.id, dropZone)
+          }
+        }}
+        onClick={() => onSelect(node.id)}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          const action = prompt(
+            `「${node.name}」\n1: サブフォルダ作成\n2: リネーム\n3: 別フォルダへ移動\n4: 削除\n番号を入力`,
+          )
+          if (action === '1') {
+            const name = prompt('サブフォルダ名')
+            if (name) {
+              createFolder(name, node.id)
+              expanded.open(node.id)
+            }
+          } else if (action === '2') {
+            const name = prompt('新しい名前', node.name)
+            if (name) renameFolder(node.id, name)
+          } else if (action === '3') {
+            const dest = pickFolder('移動先を選択', allFolders, node.id)
+            if (!dest) return
+            moveFolder(node.id, dest.id)
+          } else if (action === '4') {
+            if (confirm(`「${node.name}」と中身をすべて削除しますか？`)) {
+              deleteFolder(node.id)
+              if (selected) onSelect(null)
+            }
+          }
+        }}
+        style={{ paddingLeft: 12 + depth * 14 }}
+        className={`relative pr-3 py-1.5 rounded-lg text-[13px] cursor-pointer flex items-center gap-1.5 select-none mb-0.5 transition ${
+          selected
+            ? 'bg-white/10 text-white font-medium'
+            : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-200'
+        } ${
+          zone === 'into' || zone === 'doc-into'
+            ? 'bg-blue-500/15 ring-2 ring-blue-500/60 text-blue-100'
+            : ''
+        }`}
+      >
+        {zone === 'before' && (
+          <span className="absolute left-2 right-2 top-0 h-0.5 bg-blue-400 rounded pointer-events-none shadow-[0_0_6px_rgba(96,165,250,0.6)]" />
+        )}
+        {zone === 'after' && (
+          <span className="absolute left-2 right-2 bottom-0 h-0.5 bg-blue-400 rounded pointer-events-none shadow-[0_0_6px_rgba(96,165,250,0.6)]" />
+        )}
+        {node.children.length > 0 ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              expanded.toggle(node.id)
+            }}
+            className="w-4 text-neutral-600 hover:text-neutral-300 transition"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className={`transition-transform ${open ? 'rotate-90' : ''}`}>
+              <path d="M3 1.5l4 3.5-4 3.5z" />
+            </svg>
+          </button>
+        ) : (
+          <span className="w-4" />
+        )}
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" className="shrink-0 opacity-50">
+          <path d="M2 4.5V11a1 1 0 001 1h8a1 1 0 001-1V6a1 1 0 00-1-1H7L5.5 3H3a1 1 0 00-1 1v.5z" />
+        </svg>
+        <span className="truncate">{node.name}</span>
+      </div>
+      {open &&
+        node.children.map((child) => (
+          <FolderRow
+            key={child.id}
+            node={child}
+            depth={depth + 1}
+            allFolders={allFolders}
+            selectedFolderId={selectedFolderId}
+            onSelect={onSelect}
+            expanded={expanded}
+          />
+        ))}
     </div>
   )
 }
