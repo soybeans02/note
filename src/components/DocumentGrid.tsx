@@ -71,17 +71,21 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
 
   const sortedDocs = useMemo(() => documents, [documents])
 
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+    lastSelectedRef.current = id
+  }
+
   const handleCardClick = (doc: DocumentMeta, e: React.MouseEvent) => {
     const meta = e.metaKey || e.ctrlKey
     const shift = e.shiftKey
     if (meta) {
-      setSelected((prev) => {
-        const next = new Set(prev)
-        if (next.has(doc.id)) next.delete(doc.id)
-        else next.add(doc.id)
-        return next
-      })
-      lastSelectedRef.current = doc.id
+      toggleSelect(doc.id)
       return
     }
     if (shift && lastSelectedRef.current) {
@@ -99,13 +103,7 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
     }
     if (selected.size > 0) {
       // In select mode, a bare click toggles instead of opening
-      setSelected((prev) => {
-        const next = new Set(prev)
-        if (next.has(doc.id)) next.delete(doc.id)
-        else next.add(doc.id)
-        return next
-      })
-      lastSelectedRef.current = doc.id
+      toggleSelect(doc.id)
       return
     }
     onOpen(doc)
@@ -170,6 +168,7 @@ export default function DocumentGrid({ documents, folders, onOpen }: Props) {
             selectionActive={selected.size > 0}
             allSelectedIds={selected}
             onClickCard={(e) => handleCardClick(doc, e)}
+            onToggleSelect={() => toggleSelect(doc.id)}
           />
         ))}
       </div>
@@ -307,6 +306,7 @@ function Card({
   selectionActive,
   allSelectedIds,
   onClickCard,
+  onToggleSelect,
 }: {
   doc: DocumentMeta
   folders: Folder[]
@@ -314,6 +314,7 @@ function Card({
   selectionActive: boolean
   allSelectedIds: Set<string>
   onClickCard: (e: React.MouseEvent) => void
+  onToggleSelect: () => void
 }) {
   const [zone, setZone] = useState<'before' | 'after' | null>(null)
   const [dragging, setDragging] = useState(false)
@@ -387,8 +388,10 @@ function Card({
         <button
           onClick={(e) => {
             e.stopPropagation()
-            onClickCard({ ...e, metaKey: true } as unknown as React.MouseEvent)
+            onToggleSelect()
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          draggable={false}
           className={`absolute top-1.5 left-1.5 z-[1] w-5 h-5 rounded-full flex items-center justify-center transition ${
             selected
               ? 'bg-blue-500 text-white opacity-100'
@@ -408,7 +411,8 @@ function Card({
             <img
               src={doc.thumbDataUrl}
               alt={doc.name}
-              className="w-full h-full object-cover"
+              draggable={false}
+              className="w-full h-full object-cover pointer-events-none select-none"
             />
           ) : (
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.2" className="text-neutral-700">
