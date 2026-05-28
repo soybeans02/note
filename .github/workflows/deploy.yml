@@ -24,7 +24,15 @@ jobs:
           node-version: '20'
           cache: 'npm'
       - run: npm ci
-      - run: npm run build
+      - name: Build
+        env:
+          # All optional. Unset → password gate is off and sync is disabled.
+          VITE_NOTE_PASSWORD_HASH: ${{ secrets.VITE_NOTE_PASSWORD_HASH }}
+          VITE_AWS_REGION: ${{ secrets.VITE_AWS_REGION }}
+          VITE_AWS_BUCKET: ${{ secrets.VITE_AWS_BUCKET }}
+          VITE_AWS_ACCESS_KEY_ID: ${{ secrets.VITE_AWS_ACCESS_KEY_ID }}
+          VITE_AWS_SECRET_ACCESS_KEY: ${{ secrets.VITE_AWS_SECRET_ACCESS_KEY }}
+        run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -6,3 +6,5 @@ dev-dist
 .vite
 .claude/
 tsconfig.tsbuildinfo
+.env.local
+.env.*.local
