@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db/db'
 import { downloadBlob, exportAll, importAll } from '../lib/backup'
+import { useSyncState, syncNow } from '../hooks/useSync'
 
 function useOnline() {
   const [online, setOnline] = useState(
@@ -33,6 +34,54 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)}GB`
+}
+
+function formatSyncTime(ts: number | null): string {
+  if (!ts) return '未同期'
+  const diff = Date.now() - ts
+  if (diff < 60_000) return 'たった今'
+  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}分前`
+  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}時間前`
+  return new Date(ts).toLocaleDateString('ja-JP')
+}
+
+function SyncBadge() {
+  const sync = useSyncState()
+  if (!sync.enabled) return null
+  const busy = sync.status === 'pulling' || sync.status === 'pushing'
+  const err = sync.status === 'error'
+  const tone = err
+    ? 'bg-red-500/10 text-red-300 hover:bg-red-500/15'
+    : busy
+      ? 'bg-blue-500/10 text-blue-200 hover:bg-blue-500/15'
+      : 'bg-neutral-800/60 text-neutral-400 hover:bg-neutral-800'
+  return (
+    <button
+      onClick={() => { void syncNow() }}
+      title={err ? `同期エラー: ${sync.lastError}` : `クラウド同期 — ${formatSyncTime(sync.lastSyncedAt)}${sync.pendingBlobs ? `（ファイル${sync.pendingBlobs}件アップロード中）` : ''}`}
+      className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md transition shrink-0 ${tone}`}
+    >
+      <svg
+        width="11"
+        height="11"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={busy ? 'animate-spin' : ''}
+      >
+        <path d="M10 5a4 4 0 0 0-7-2.6" />
+        <path d="M2 7a4 4 0 0 0 7 2.6" />
+        <path d="M10 1.5V5h-3.5" />
+        <path d="M2 10.5V7h3.5" />
+      </svg>
+      <span className="hidden sm:inline">
+        {busy ? '同期中' : err ? 'エラー' : sync.pendingBlobs > 0 ? `${sync.pendingBlobs}件UP` : '同期済'}
+      </span>
+    </button>
+  )
 }
 
 export default function Toolbar({ search, onSearch, folderLabel, isMobile, onMenuToggle }: Props) {
@@ -75,6 +124,7 @@ export default function Toolbar({ search, onSearch, folderLabel, isMobile, onMen
         />
       </div>
       <div className="flex-1" />
+      <SyncBadge />
       {!online && (
         <div
           title="オフライン中 — 操作はすべてローカルで完結します"

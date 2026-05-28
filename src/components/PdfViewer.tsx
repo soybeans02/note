@@ -560,6 +560,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
         ) : isImagePage ? (
           <ImagePageView
             blob={currentEntry.blob}
+            imagePageId={currentEntry.imagePageId}
             docId={doc.id}
             pageKey={annotationPageKey}
             strokes={strokes}
@@ -678,6 +679,7 @@ function NotePageView({
 
 function ImagePageView({
   blob,
+  imagePageId,
   docId,
   pageKey,
   strokes,
@@ -690,6 +692,7 @@ function ImagePageView({
   textBold,
 }: {
   blob: Blob
+  imagePageId: string
   docId: string
   pageKey: string
   strokes: Stroke[]
@@ -706,10 +709,25 @@ function ImagePageView({
   const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
-    const objUrl = URL.createObjectURL(blob)
-    setUrl(objUrl)
-    return () => URL.revokeObjectURL(objUrl)
-  }, [blob])
+    let cancelled = false
+    let objUrl = ''
+    ;(async () => {
+      let real = blob
+      // Placeholder blob from a synced row — lazily pull from S3.
+      if (!real || real.size === 0) {
+        const { downloadImagePageBlob } = await import('../lib/syncEngine')
+        const fetched = await downloadImagePageBlob(imagePageId)
+        if (fetched) real = fetched
+      }
+      if (cancelled || !real || real.size === 0) return
+      objUrl = URL.createObjectURL(real)
+      setUrl(objUrl)
+    })()
+    return () => {
+      cancelled = true
+      if (objUrl) URL.revokeObjectURL(objUrl)
+    }
+  }, [blob, imagePageId])
 
   const handleLoad = useCallback(() => {
     if (imgRef.current) {

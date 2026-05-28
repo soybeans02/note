@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, type DocumentMeta } from '../db/db'
 import { extractPdfMeta } from '../lib/pdf'
 import { addImagePage } from './useImagePages'
+import { downloadDocBlob } from '../lib/syncEngine'
 
 export function useDocumentsInFolder(
   folderId: string | null,
@@ -227,5 +228,8 @@ export async function deleteDocument(id: string) {
 
 export async function getDocumentBlob(id: string): Promise<Blob | undefined> {
   const row = await db.blobs.get(id)
-  return row?.blob
+  if (row) return row.blob
+  // Fall back to S3 if sync is configured — the blob will be cached locally.
+  const fetched = await downloadDocBlob(id)
+  return fetched ?? undefined
 }

@@ -73,6 +73,27 @@ export interface ImagePage {
   updatedAt: number
 }
 
+/** Sync bookkeeping. */
+export type TombstoneTable =
+  | 'folders'
+  | 'documents'
+  | 'notePages'
+  | 'imagePages'
+  | 'annotations'
+
+export interface Tombstone {
+  id: string // `${table}:${rowId}`
+  table: TombstoneTable
+  rowId: string
+  deletedAt: number
+}
+
+/** Per-blob upload state for S3 sync. */
+export interface SyncedBlob {
+  key: string // 'blobs/<docId>' or 'imageblobs/<imagePageId>'
+  uploadedAt: number
+}
+
 class NoteDB extends Dexie {
   folders!: Table<Folder, string>
   documents!: Table<DocumentMeta, string>
@@ -80,6 +101,8 @@ class NoteDB extends Dexie {
   annotations!: Table<Annotation, string>
   notePages!: Table<NotePage, string>
   imagePages!: Table<ImagePage, string>
+  tombstones!: Table<Tombstone, string>
+  syncedBlobs!: Table<SyncedBlob, string>
 
   constructor() {
     super('note-db')
@@ -168,6 +191,16 @@ class NoteDB extends Dexie {
       annotations: 'id, docId, pageNum',
       notePages: 'id, documentId, afterPage',
       imagePages: 'id, documentId, afterPage',
+    })
+    this.version(6).stores({
+      folders: 'id, parentId, name, order, updatedAt',
+      documents: 'id, folderId, name, order, updatedAt',
+      blobs: 'id',
+      annotations: 'id, docId, pageNum',
+      notePages: 'id, documentId, afterPage',
+      imagePages: 'id, documentId, afterPage',
+      tombstones: 'id, table, rowId, deletedAt',
+      syncedBlobs: 'key, uploadedAt',
     })
   }
 }
