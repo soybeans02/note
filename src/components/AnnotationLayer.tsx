@@ -625,12 +625,16 @@ export default function AnnotationLayer({
               left,
               top,
               width: tbWidth,
+              // Legacy/auto boxes have no stored width — cap them at the same
+              // width the editor used so they wrap instead of collapsing to a
+              // single line. (matches `tbWidth ?? Math.max(120, fs*6)` editor.)
+              maxWidth: tbWidth ? undefined : Math.max(120, fs * 6),
               height: tbHeight,
               fontSize: fs,
               fontWeight: tb.bold ? 700 : 400,
               color: tb.color,
               whiteSpace: 'pre-wrap',
-              wordBreak: tbWidth ? 'break-word' : undefined,
+              wordBreak: 'break-word',
               overflow: tbHeight ? 'hidden' : undefined,
               lineHeight: 1.4,
               fontFamily: 'sans-serif',
