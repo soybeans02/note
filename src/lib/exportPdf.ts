@@ -64,15 +64,47 @@ async function renderPageToImage(
     // Text boxes
     const baseScale = Math.min(viewport.width, viewport.height) / 500
     for (const tb of annotation.textBoxes ?? []) {
-      const x = tb.x * viewport.width
-      const y = tb.y * viewport.height
       const fs = tb.fontSize * baseScale
       ctx.font = `${tb.bold ? 'bold ' : ''}${fs}px sans-serif`
       ctx.fillStyle = tb.color
       ctx.textBaseline = 'top'
-      const lines = tb.text.split('\n')
-      for (let i = 0; i < lines.length; i++) {
-        ctx.fillText(lines[i], x, y + i * fs * 1.4)
+      const pad = Math.max(2 * baseScale, fs * 0.15)
+      const boxLeft = tb.x * viewport.width
+      const boxTop = tb.y * viewport.height
+      const lineHeight = fs * 1.4
+
+      if (tb.width) {
+        // Fixed-width box: wrap text to the inner width, clip to height if set.
+        const innerW = tb.width * viewport.width - pad * 2
+        const innerH = tb.height ? tb.height * viewport.height - pad * 2 : Infinity
+        const x = boxLeft + pad
+        let y = boxTop + pad
+        const maxY = boxTop + pad + innerH
+        for (const para of tb.text.split('\n')) {
+          let line = ''
+          for (const ch of para) {
+            const test = line + ch
+            if (ctx.measureText(test).width > innerW && line !== '') {
+              if (y + lineHeight > maxY) { line = ''; break }
+              ctx.fillText(line, x, y)
+              y += lineHeight
+              line = ch
+            } else {
+              line = test
+            }
+          }
+          if (line && y + lineHeight <= maxY + 0.01) {
+            ctx.fillText(line, x, y)
+            y += lineHeight
+          }
+          if (y > maxY) break
+        }
+      } else {
+        // Auto box: just honor explicit newlines (legacy behavior).
+        const lines = tb.text.split('\n')
+        for (let i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], boxLeft, boxTop + i * lineHeight)
+        }
       }
     }
   }

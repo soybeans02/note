@@ -39,7 +39,8 @@ export interface TextBox {
   id: string
   x: number // 0-1 normalized
   y: number // 0-1 normalized
-  width?: number // 0-1 normalized
+  width?: number // 0-1 normalized (outer box, border-box)
+  height?: number // 0-1 normalized; when set, the box is fixed-height (no auto-grow)
   text: string
   color: string
   fontSize: number // in px at base scale

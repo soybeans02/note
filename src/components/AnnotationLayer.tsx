@@ -95,6 +95,7 @@ type DragState = {
   origX: number
   origY: number
   origWidth?: number
+  origHeight?: number
   moved: boolean
 }
 
@@ -121,6 +122,9 @@ export default function AnnotationLayer({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Drag-to-create box (text tool)
+  const drawStartRef = useRef<{ x: number; y: number } | null>(null)
+  const [drawRect, setDrawRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
 
   // Commit any pending edit and clear selection when tool/page changes
   const editingIdRef = useRef<string | null>(null)
@@ -283,42 +287,79 @@ export default function AnnotationLayer({
     addStroke(docId, pageKey, stroke)
   }, [docId, pageKey, color, width, tool])
 
-  // Commit text edit
+  // Commit text edit — also persists the box size for fixed-height boxes so a
+  // manual resize of the textarea sticks.
   const commitTextEdit = useCallback(
     (tbId: string, text: string) => {
       if (text.trim() === '') {
         removeTextBox(docId, pageKey, tbId)
       } else {
-        updateTextBox(docId, pageKey, tbId, { text })
+        const patch: Partial<TextBox> = { text }
+        const ta = textareaRef.current
+        const box = textBoxes.find((t) => t.id === tbId)
+        if (ta && box?.height && canvasWidth > 0 && canvasHeight > 0) {
+          patch.width = ta.offsetWidth / canvasWidth
+          patch.height = ta.offsetHeight / canvasHeight
+        }
+        updateTextBox(docId, pageKey, tbId, patch)
       }
       setEditingId(null)
       setEditingText('')
     },
-    [docId, pageKey],
+    [docId, pageKey, textBoxes, canvasWidth, canvasHeight],
   )
 
-  // Text tool: click to create new text box (or dismiss edit)
-  const handleTextClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (!interactive || tool !== 'text') return
-
-      // If editing, commit first and don't create a new box
-      if (editingId) {
-        commitTextEdit(editingId, editingText)
-        return
+  // Text tool: drag to draw a sized box, or tap to drop an auto-grow box.
+  useEffect(() => {
+    if (!interactive || tool !== 'text') return
+    const norm = (e: MouseEvent) => {
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return null
+      return {
+        x: (e.clientX - rect.left) / rect.width,
+        y: (e.clientY - rect.top) / rect.height,
       }
-
-      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-      const nx = (e.clientX - rect.left) / rect.width
-      const ny = (e.clientY - rect.top) / rect.height
+    }
+    const onMove = (e: MouseEvent) => {
+      const start = drawStartRef.current
+      if (!start) return
+      const p = norm(e)
+      if (!p) return
+      setDrawRect({
+        x: Math.min(start.x, p.x),
+        y: Math.min(start.y, p.y),
+        w: Math.abs(p.x - start.x),
+        h: Math.abs(p.y - start.y),
+      })
+    }
+    const onUp = (e: MouseEvent) => {
+      const start = drawStartRef.current
+      if (!start) return
+      drawStartRef.current = null
+      setDrawRect(null)
+      const p = norm(e)
+      if (!p) return
+      const x = Math.min(start.x, p.x)
+      const y = Math.min(start.y, p.y)
+      const w = Math.abs(p.x - start.x)
+      const h = Math.abs(p.y - start.y)
       const id = uid()
-      const tb: TextBox = { id, x: nx, y: ny, text: '', color, fontSize, bold }
+      const tb: TextBox =
+        w > 0.02 && h > 0.02
+          ? { id, x, y, width: w, height: h, text: '', color, fontSize, bold }
+          : { id, x: start.x, y: start.y, text: '', color, fontSize, bold }
       addTextBox(docId, pageKey, tb)
+      setSelectedId(null)
       setEditingId(id)
       setEditingText('')
-    },
-    [interactive, tool, color, fontSize, bold, docId, pageKey, editingId, editingText, commitTextEdit],
-  )
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [interactive, tool, color, fontSize, bold, docId, pageKey])
 
   // Click on background to commit edit / deselect
   const handleBgClick = useCallback(() => {
@@ -341,9 +382,12 @@ export default function AnnotationLayer({
         const newX = Math.max(0, Math.min(1, drag.origX + totalDx / canvasWidth))
         const newY = Math.max(0, Math.min(1, drag.origY + totalDy / canvasHeight))
         updateTextBox(docId, pageKey, drag.tbId, { x: newX, y: newY })
-      } else if (drag.type === 'resize' && drag.origWidth !== undefined) {
-        const newW = Math.max(0.05, Math.min(1, drag.origWidth + totalDx / canvasWidth))
-        updateTextBox(docId, pageKey, drag.tbId, { width: newW })
+      } else if (drag.type === 'resize') {
+        const baseW = drag.origWidth ?? 0.2
+        const baseH = drag.origHeight ?? 0.1
+        const newW = Math.max(0.05, Math.min(1, baseW + totalDx / canvasWidth))
+        const newH = Math.max(0.04, Math.min(1, baseH + totalDy / canvasHeight))
+        updateTextBox(docId, pageKey, drag.tbId, { width: newW, height: newH })
       }
     }
     const onUp = () => { dragRef.current = null }
@@ -379,13 +423,15 @@ export default function AnnotationLayer({
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedId, editingId, docId, pageKey, textBoxes])
 
-  // Auto-grow editing textarea
+  // Auto-grow editing textarea — only for boxes WITHOUT an explicit height.
   useEffect(() => {
     const ta = textareaRef.current
     if (!ta) return
+    const box = textBoxes.find((t) => t.id === editingId)
+    if (box?.height) return // fixed-height box — keep its size, let it scroll
     ta.style.height = 'auto'
     ta.style.height = ta.scrollHeight + 'px'
-  }, [editingText, editingId])
+  }, [editingText, editingId, textBoxes])
 
   // Click outside to deselect/commit (window-level)
   useEffect(() => {
@@ -451,6 +497,7 @@ export default function AnnotationLayer({
         const top = tb.y * canvasHeight
         const fs = tb.fontSize * scale
         const tbWidth = tb.width ? tb.width * canvasWidth : undefined
+        const tbHeight = tb.height ? tb.height * canvasHeight : undefined
         const padding = Math.max(2, fs * 0.15)
 
         if (isEditing) {
@@ -482,6 +529,7 @@ export default function AnnotationLayer({
                 style={{
                   display: 'block',
                   width: tbWidth ?? Math.max(120, fs * 6),
+                  height: tbHeight,
                   fontSize: fs,
                   fontWeight: tb.bold ? 700 : 400,
                   color: tb.color,
@@ -491,8 +539,8 @@ export default function AnnotationLayer({
                   borderRadius: 4,
                   padding: `${padding}px ${padding * 1.5}px`,
                   outline: 'none',
-                  resize: 'none',
-                  overflow: 'hidden',
+                  resize: 'both',
+                  overflow: tbHeight ? 'auto' : 'hidden',
                   lineHeight: 1.4,
                   fontFamily: 'sans-serif',
                   boxSizing: 'border-box',
@@ -502,17 +550,36 @@ export default function AnnotationLayer({
           )
         }
 
-        const startDrag = (e: React.MouseEvent, type: 'move' | 'resize') => {
+        const startMove = (e: React.MouseEvent) => {
           e.preventDefault()
           e.stopPropagation()
           dragRef.current = {
-            type,
+            type: 'move',
             tbId: tb.id,
             startX: e.clientX,
             startY: e.clientY,
             origX: tb.x,
             origY: tb.y,
-            origWidth: tb.width,
+            moved: false,
+          }
+        }
+        const startResize = (e: React.MouseEvent) => {
+          e.preventDefault()
+          e.stopPropagation()
+          const boxEl = (e.currentTarget as HTMLElement).parentElement
+          const origWidth =
+            tb.width ?? (boxEl && canvasWidth ? boxEl.offsetWidth / canvasWidth : 0.2)
+          const origHeight =
+            tb.height ?? (boxEl && canvasHeight ? boxEl.offsetHeight / canvasHeight : 0.1)
+          dragRef.current = {
+            type: 'resize',
+            tbId: tb.id,
+            startX: e.clientX,
+            startY: e.clientY,
+            origX: tb.x,
+            origY: tb.y,
+            origWidth,
+            origHeight,
             moved: false,
           }
         }
@@ -524,7 +591,7 @@ export default function AnnotationLayer({
             onMouseDown={(e) => {
               if (!textBoxClickable) return
               if (tool === 'object-eraser') return
-              startDrag(e, 'move')
+              startMove(e)
               setSelectedId(tb.id)
             }}
             onClick={(e) => {
@@ -552,14 +619,16 @@ export default function AnnotationLayer({
             }}
             style={{
               position: 'absolute',
-              left: left - padding * 1.5,
-              top: top - padding,
-              width: tbWidth !== undefined ? tbWidth + padding * 3 : undefined,
+              left,
+              top,
+              width: tbWidth,
+              height: tbHeight,
               fontSize: fs,
               fontWeight: tb.bold ? 700 : 400,
               color: tb.color,
               whiteSpace: 'pre-wrap',
               wordBreak: tbWidth ? 'break-word' : undefined,
+              overflow: tbHeight ? 'hidden' : undefined,
               lineHeight: 1.4,
               fontFamily: 'sans-serif',
               cursor: textBoxClickable
@@ -579,17 +648,16 @@ export default function AnnotationLayer({
             {tb.text}
             {isSelected && (
               <div
-                onMouseDown={(e) => startDrag(e, 'resize')}
+                onMouseDown={startResize}
                 style={{
                   position: 'absolute',
-                  right: -6,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: 10,
-                  height: 28,
-                  borderRadius: 4,
+                  right: -7,
+                  bottom: -7,
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
                   background: '#3b82f6',
-                  cursor: 'ew-resize',
+                  cursor: 'nwse-resize',
                   border: '2px solid white',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 }}
@@ -599,18 +667,47 @@ export default function AnnotationLayer({
         )
       })}
 
-      {/* Click overlay for text tool — behind text boxes but above canvas */}
+      {/* Live rectangle while drawing a new text box */}
+      {drawRect && (drawRect.w > 0.005 || drawRect.h > 0.005) && (
+        <div
+          style={{
+            position: 'absolute',
+            left: drawRect.x * canvasWidth,
+            top: drawRect.y * canvasHeight,
+            width: drawRect.w * canvasWidth,
+            height: drawRect.h * canvasHeight,
+            border: '1.5px dashed #3b82f6',
+            background: 'rgba(59,130,246,0.08)',
+            borderRadius: 4,
+            pointerEvents: 'none',
+            zIndex: 5,
+          }}
+        />
+      )}
+
+      {/* Drag/tap surface for text tool — behind text boxes but above canvas */}
       {interactive && isTextTool && (
         <div
           data-text-overlay
-          onClick={handleTextClick}
+          onMouseDown={(e) => {
+            if (editingId) {
+              commitTextEdit(editingId, editingText)
+              return
+            }
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+            drawStartRef.current = {
+              x: (e.clientX - rect.left) / rect.width,
+              y: (e.clientY - rect.top) / rect.height,
+            }
+            setDrawRect({ x: drawStartRef.current.x, y: drawStartRef.current.y, w: 0, h: 0 })
+          }}
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             width: canvasWidth,
             height: canvasHeight,
-            cursor: 'text',
+            cursor: 'crosshair',
             pointerEvents: 'auto',
             zIndex: 0,
           }}
