@@ -17,6 +17,9 @@ interface Props {
   bold: boolean
   canvasWidth: number
   canvasHeight: number
+  /** Notifies the parent when a text box enters/leaves edit mode, so the
+   *  toolbar can surface text styling controls regardless of the active tool. */
+  onEditingChange?: (editing: boolean) => void
 }
 
 function getSvgPathFromStroke(points: number[][]): string {
@@ -112,6 +115,7 @@ export default function AnnotationLayer({
   bold,
   canvasWidth,
   canvasHeight,
+  onEditingChange,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -128,6 +132,12 @@ export default function AnnotationLayer({
   // Set true on the mouseup that ends a move/resize drag, so the click that
   // follows doesn't open the editor.
   const suppressClickRef = useRef(false)
+
+  // Tell the parent whether a text box is being edited (so the toolbar can
+  // show text styling controls even under the hand tool).
+  useEffect(() => {
+    onEditingChange?.(editingId !== null)
+  }, [editingId, onEditingChange])
 
   // Commit any pending edit and clear selection when tool/page changes
   const editingIdRef = useRef<string | null>(null)

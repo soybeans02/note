@@ -31,6 +31,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const [textBold, setTextBold] = useState(false)
   const [canvasDims, setCanvasDims] = useState({ w: 0, h: 0 })
   const [exporting, setExporting] = useState(false)
+  const [editingText, setEditingText] = useState(false)
 
   const activeColor = drawTool === 'highlighter' ? highlighterColor : drawColor
   const activeWidth = drawTool === 'highlighter' ? highlighterWidth : drawWidth
@@ -123,6 +124,11 @@ export default function PdfViewer({ doc, onClose }: Props) {
       cancelled = true
     }
   }, [pdf, page, zoom, isPdfPage, currentPdfPageNum])
+
+  // Leaving a page closes any text-editing state for the toolbar.
+  useEffect(() => {
+    setEditingText(false)
+  }, [page])
 
   // Focus textarea on note page
   useEffect(() => {
@@ -571,6 +577,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
             drawWidth={activeWidth}
             textFontSize={textFontSize}
             textBold={textBold}
+            onEditingChange={setEditingText}
           />
         ) : isPdfPage ? (
           <div className="relative inline-block">
@@ -589,6 +596,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
                 bold={textBold}
                 canvasWidth={canvasDims.w}
                 canvasHeight={canvasDims.h}
+                onEditingChange={setEditingText}
               />
             )}
           </div>
@@ -617,6 +625,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
           highlighterWidth={highlighterWidth}
           fontSize={textFontSize}
           bold={textBold}
+          editingText={editingText}
           onToolChange={setDrawTool}
           onColorChange={setDrawColor}
           onWidthChange={setDrawWidth}
@@ -690,6 +699,7 @@ function ImagePageView({
   drawWidth,
   textFontSize,
   textBold,
+  onEditingChange,
 }: {
   blob: Blob
   imagePageId: string
@@ -703,6 +713,7 @@ function ImagePageView({
   drawWidth: number
   textFontSize: number
   textBold: boolean
+  onEditingChange?: (editing: boolean) => void
 }) {
   const [url, setUrl] = useState('')
   const [dims, setDims] = useState({ w: 0, h: 0 })
@@ -760,6 +771,7 @@ function ImagePageView({
           bold={textBold}
           canvasWidth={dims.w}
           canvasHeight={dims.h}
+          onEditingChange={onEditingChange}
         />
       )}
     </div>

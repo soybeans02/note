@@ -16,6 +16,9 @@ interface Props {
   highlighterWidth: number
   fontSize: number
   bold: boolean
+  /** A text box is currently being edited — show text styling controls even
+   *  when the active tool isn't the text tool. */
+  editingText?: boolean
   onToolChange: (tool: DrawTool) => void
   onColorChange: (color: string) => void
   onWidthChange: (width: number) => void
@@ -65,6 +68,7 @@ export default function DrawingToolbar({
   highlighterWidth,
   fontSize,
   bold,
+  editingText,
   onToolChange,
   onColorChange,
   onWidthChange,
@@ -73,12 +77,17 @@ export default function DrawingToolbar({
   onFontSizeChange,
   onBoldChange,
 }: Props) {
+  // Show text styling controls for the text tool, OR while a box is being
+  // edited under another tool (e.g. tapping a box with the hand tool).
+  const showTextOptions = tool === 'text' || !!editingText
+  const showPen = tool === 'pen' && !editingText
+  const showHighlighter = tool === 'highlighter' && !editingText
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 max-w-[calc(100vw-2rem)]">
       {/* Sub-options bar (color/width/text settings) */}
-      {(tool === 'pen' || tool === 'highlighter' || tool === 'text') && (
+      {(showPen || showHighlighter || showTextOptions) && (
         <div className="flex items-center gap-1 bg-neutral-900/95 backdrop-blur-md border border-neutral-800 rounded-xl px-2 py-1.5 shadow-2xl overflow-x-auto scroll-thin">
-          {tool === 'pen' && (
+          {showPen && (
             <>
               {PEN_COLORS.map((c) => (
                 <Tooltip key={c.value} label={c.label}>
@@ -111,7 +120,7 @@ export default function DrawingToolbar({
             </>
           )}
 
-          {tool === 'highlighter' && (
+          {showHighlighter && (
             <>
               {HIGHLIGHTER_COLORS.map((c) => (
                 <Tooltip key={c.value} label={c.label}>
@@ -149,7 +158,7 @@ export default function DrawingToolbar({
             </>
           )}
 
-          {tool === 'text' && (
+          {showTextOptions && (
             <>
               {PEN_COLORS.slice(0, 6).map((c) => (
                 <Tooltip key={c.value} label={c.label}>
