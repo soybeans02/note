@@ -287,8 +287,9 @@ export default function AnnotationLayer({
     addStroke(docId, pageKey, stroke)
   }, [docId, pageKey, color, width, tool])
 
-  // Commit text edit — also persists the box size for fixed-height boxes so a
-  // manual resize of the textarea sticks.
+  // Commit text edit. Persist the box WIDTH so the static display wraps text
+  // exactly like the editor did (otherwise an auto box collapses to one long
+  // line on deselect). Fixed-height boxes also persist their height.
   const commitTextEdit = useCallback(
     (tbId: string, text: string) => {
       if (text.trim() === '') {
@@ -297,9 +298,11 @@ export default function AnnotationLayer({
         const patch: Partial<TextBox> = { text }
         const ta = textareaRef.current
         const box = textBoxes.find((t) => t.id === tbId)
-        if (ta && box?.height && canvasWidth > 0 && canvasHeight > 0) {
+        if (ta && canvasWidth > 0) {
           patch.width = ta.offsetWidth / canvasWidth
-          patch.height = ta.offsetHeight / canvasHeight
+          if (box?.height && canvasHeight > 0) {
+            patch.height = ta.offsetHeight / canvasHeight
+          }
         }
         updateTextBox(docId, pageKey, tbId, patch)
       }
