@@ -125,6 +125,9 @@ export default function AnnotationLayer({
   // Drag-to-create box (text tool)
   const drawStartRef = useRef<{ x: number; y: number } | null>(null)
   const [drawRect, setDrawRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  // Set true on the mouseup that ends a move/resize drag, so the click that
+  // follows doesn't open the editor.
+  const suppressClickRef = useRef(false)
 
   // Commit any pending edit and clear selection when tool/page changes
   const editingIdRef = useRef<string | null>(null)
@@ -393,7 +396,10 @@ export default function AnnotationLayer({
         updateTextBox(docId, pageKey, drag.tbId, { width: newW, height: newH })
       }
     }
-    const onUp = () => { dragRef.current = null }
+    const onUp = () => {
+      if (dragRef.current?.moved) suppressClickRef.current = true
+      dragRef.current = null
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => {
@@ -594,31 +600,25 @@ export default function AnnotationLayer({
             onMouseDown={(e) => {
               if (!textBoxClickable) return
               if (tool === 'object-eraser') return
+              // Begin a potential move drag. A real drag moves the box; a tap
+              // (no movement) falls through to onClick and opens the editor.
               startMove(e)
-              setSelectedId(tb.id)
             }}
             onClick={(e) => {
               if (!textBoxClickable) return
               e.stopPropagation()
-              const dragMoved = dragRef.current?.moved
-              if (dragMoved) return
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false
+                return
+              }
               if (tool === 'object-eraser') {
                 removeTextBox(docId, pageKey, tb.id)
                 return
               }
-              if (tool === 'text') {
-                setEditingId(tb.id)
-                setEditingText(tb.text)
-                setSelectedId(null)
-              }
-            }}
-            onDoubleClick={(e) => {
-              if (!textBoxClickable) return
-              if (tool === 'object-eraser') return
-              e.stopPropagation()
+              // Single tap on the text → re-edit (hand or text tool).
+              setSelectedId(null)
               setEditingId(tb.id)
               setEditingText(tb.text)
-              setSelectedId(null)
             }}
             style={{
               position: 'absolute',
