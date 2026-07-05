@@ -17,9 +17,14 @@ interface Props {
   bold: boolean
   canvasWidth: number
   canvasHeight: number
-  /** Notifies the parent when a text box enters/leaves edit mode, so the
-   *  toolbar can surface text styling controls regardless of the active tool. */
-  onEditingChange?: (editing: boolean) => void
+  /** Notifies the parent when a text box enters/leaves edit mode. On entry the
+   *  box's own style is passed so the toolbar can mirror it — otherwise the
+   *  toolbar shows stale global values and clicking the "already selected"
+   *  color/size does nothing. */
+  onEditingChange?: (
+    editing: boolean,
+    style?: { color: string; fontSize: number; bold: boolean },
+  ) => void
 }
 
 function getSvgPathFromStroke(points: number[][]): string {
@@ -133,10 +138,24 @@ export default function AnnotationLayer({
   // follows doesn't open the editor.
   const suppressClickRef = useRef(false)
 
-  // Tell the parent whether a text box is being edited (so the toolbar can
-  // show text styling controls even under the hand tool).
+  // Tell the parent whether a text box is being edited. On entry, hand the
+  // box's own style up so the toolbar mirrors it (color/size/bold shown match
+  // the box being edited, not whatever the pen was last set to).
   useEffect(() => {
-    onEditingChange?.(editingId !== null)
+    if (editingId === null) {
+      onEditingChange?.(false)
+      return
+    }
+    const box = textBoxes.find((t) => t.id === editingId)
+    onEditingChange?.(
+      true,
+      box
+        ? { color: box.color, fontSize: box.fontSize, bold: box.bold ?? false }
+        : undefined,
+    )
+    // textBoxes intentionally omitted: only fire when the edit target changes,
+    // not on every keystroke-driven row update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId, onEditingChange])
 
   // Commit any pending edit and clear selection when tool/page changes
@@ -156,22 +175,41 @@ export default function AnnotationLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageKey, tool])
 
-  // Apply toolbar style changes to actively edited or selected text box
+  // Apply toolbar style changes to the actively edited (or selected) text box.
+  // Baseline resets when the edit target changes, so the run caused by
+  // switching boxes never writes stale toolbar values into the new box; after
+  // the parent mirrors the box style into the toolbar, only real user changes
+  // produce a diff. Values already matching the box are skipped to avoid
+  // no-op writes (each write bumps updatedAt and triggers a sync push).
   const activeTextBoxId = editingId ?? selectedId
   const activeIsEditing = editingId !== null
   const prevStyleRef = useRef({ color, fontSize, bold })
+  const styleTargetRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!activeTextBoxId) return
+    if (!activeTextBoxId) {
+      styleTargetRef.current = null
+      return
+    }
     if (!activeIsEditing && tool !== 'text') return
+    if (styleTargetRef.current !== activeTextBoxId) {
+      // New target: reset the baseline, don't write anything yet.
+      styleTargetRef.current = activeTextBoxId
+      prevStyleRef.current = { color, fontSize, bold }
+      return
+    }
     const prev = prevStyleRef.current
-    const updates: Partial<TextBox> = {}
-    if (color !== prev.color) updates.color = color
-    if (fontSize !== prev.fontSize) updates.fontSize = fontSize
-    if (bold !== prev.bold) updates.bold = bold
     prevStyleRef.current = { color, fontSize, bold }
+    const box = textBoxes.find((t) => t.id === activeTextBoxId)
+    if (!box) return
+    const updates: Partial<TextBox> = {}
+    if (color !== prev.color && color !== box.color) updates.color = color
+    if (fontSize !== prev.fontSize && fontSize !== box.fontSize) updates.fontSize = fontSize
+    if (bold !== prev.bold && bold !== (box.bold ?? false)) updates.bold = bold
     if (Object.keys(updates).length > 0) {
       updateTextBox(docId, pageKey, activeTextBoxId, updates)
     }
+    // textBoxes omitted: row updates (e.g. typing) shouldn't re-run the diff.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [color, fontSize, bold, activeTextBoxId, activeIsEditing, tool, docId, pageKey])
 
   // Render existing strokes

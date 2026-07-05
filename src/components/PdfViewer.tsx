@@ -36,6 +36,20 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const activeColor = drawTool === 'highlighter' ? highlighterColor : drawColor
   const activeWidth = drawTool === 'highlighter' ? highlighterWidth : drawWidth
 
+  // When a text box enters edit mode, mirror its style into the toolbar so
+  // the controls show (and edit) the box's real color/size/bold.
+  const handleEditingChange = useCallback(
+    (editing: boolean, style?: { color: string; fontSize: number; bold: boolean }) => {
+      setEditingText(editing)
+      if (editing && style) {
+        setDrawColor(style.color)
+        setTextFontSize(style.fontSize)
+        setTextBold(style.bold)
+      }
+    },
+    [],
+  )
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -606,7 +620,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
             drawWidth={activeWidth}
             textFontSize={textFontSize}
             textBold={textBold}
-            onEditingChange={setEditingText}
+            onEditingChange={handleEditingChange}
           />
         ) : isPdfPage ? (
           <div className="relative inline-block">
@@ -625,7 +639,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
                 bold={textBold}
                 canvasWidth={canvasDims.w}
                 canvasHeight={canvasDims.h}
-                onEditingChange={setEditingText}
+                onEditingChange={handleEditingChange}
               />
             )}
           </div>
@@ -742,7 +756,10 @@ function ImagePageView({
   drawWidth: number
   textFontSize: number
   textBold: boolean
-  onEditingChange?: (editing: boolean) => void
+  onEditingChange?: (
+    editing: boolean,
+    style?: { color: string; fontSize: number; bold: boolean },
+  ) => void
 }) {
   const [url, setUrl] = useState('')
   const [dims, setDims] = useState({ w: 0, h: 0 })

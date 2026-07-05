@@ -160,7 +160,7 @@ export default function DrawingToolbar({
 
           {showTextOptions && (
             <>
-              {PEN_COLORS.slice(0, 6).map((c) => (
+              {PEN_COLORS.map((c) => (
                 <Tooltip key={c.value} label={c.label}>
                   <button
                     onClick={() => onColorChange(c.value)}
