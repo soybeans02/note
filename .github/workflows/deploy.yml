@@ -26,8 +26,7 @@ jobs:
       - run: npm ci
       - name: Build
         env:
-          # All optional. Unset → password gate is off and sync is disabled.
-          VITE_NOTE_PASSWORD_HASH: ${{ secrets.VITE_NOTE_PASSWORD_HASH }}
+          # All optional. Unset → S3 sync is disabled (offline-only app).
           VITE_AWS_REGION: ${{ secrets.VITE_AWS_REGION }}
           VITE_AWS_BUCKET: ${{ secrets.VITE_AWS_BUCKET }}
           VITE_AWS_ACCESS_KEY_ID: ${{ secrets.VITE_AWS_ACCESS_KEY_ID }}
