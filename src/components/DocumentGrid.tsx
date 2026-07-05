@@ -7,7 +7,6 @@ import {
   renameDocument,
   reorderDocument,
 } from '../hooks/useDocuments'
-import { pickFolder } from '../lib/folderPath'
 
 interface Props {
   documents: DocumentMeta[]
@@ -318,6 +317,25 @@ function Card({
 }) {
   const [zone, setZone] = useState<'before' | 'after' | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [menu, setMenu] = useState<'closed' | 'main' | 'folders'>('closed')
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close the card menu on outside click
+  useEffect(() => {
+    if (menu === 'closed') return
+    const onMouseDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenu('closed')
+      }
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    return () => window.removeEventListener('mousedown', onMouseDown)
+  }, [menu])
+
+  const sortedFolders = useMemo(
+    () => [...folders].sort((a, b) => a.name.localeCompare(b.name, 'ja')),
+    [folders],
+  )
 
   return (
     <div className="relative">
@@ -365,18 +383,7 @@ function Card({
         onClick={onClickCard}
         onContextMenu={(e) => {
           e.preventDefault()
-          const action = prompt(
-            `「${doc.name}」\n1: リネーム\n2: 別フォルダへ移動\n3: 削除\n番号を入力`,
-          )
-          if (action === '1') {
-            const name = prompt('新しい名前', doc.name)
-            if (name) renameDocument(doc.id, name)
-          } else if (action === '2') {
-            const dest = pickFolder('移動先を選択', folders)
-            if (dest) moveDocument(doc.id, dest.id)
-          } else if (action === '3') {
-            if (confirm(`「${doc.name}」を削除しますか？`)) deleteDocument(doc.id)
-          }
+          setMenu('main')
         }}
         className={`relative group cursor-pointer flex flex-col rounded-xl overflow-hidden bg-neutral-900/80 border transition-all duration-150 ${
           selected
@@ -405,6 +412,100 @@ function Card({
             <path d="M2.5 6.5l2.5 2.5 4.5-5" />
           </svg>
         </button>
+
+        {/* Card menu (⋯) — hover-visible, replaces the old prompt() context menu */}
+        <div
+          ref={menuRef}
+          className="absolute top-1.5 right-1.5 z-[2]"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            draggable={false}
+            onClick={() => setMenu((m) => (m === 'closed' ? 'main' : 'closed'))}
+            className={`w-5 h-5 rounded-full flex items-center justify-center bg-neutral-900/70 border border-neutral-500 text-neutral-300 transition hover:bg-neutral-800 ${
+              menu !== 'closed' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            }`}
+            title="メニュー"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+              <circle cx="2.5" cy="6" r="1.1" />
+              <circle cx="6" cy="6" r="1.1" />
+              <circle cx="9.5" cy="6" r="1.1" />
+            </svg>
+          </button>
+          {menu === 'main' && (
+            <div className="absolute right-0 top-6 min-w-[150px] bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 text-left">
+              <button
+                onClick={() => {
+                  setMenu('closed')
+                  const name = prompt('新しい名前', doc.name)
+                  if (name) renameDocument(doc.id, name)
+                }}
+                className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-300 hover:bg-neutral-800 transition"
+              >
+                リネーム
+              </button>
+              <button
+                onClick={() => setMenu('folders')}
+                className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-300 hover:bg-neutral-800 transition flex items-center justify-between"
+              >
+                フォルダへ移動
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" className="opacity-60">
+                  <path d="M3 1l3.5 3.5L3 8z" />
+                </svg>
+              </button>
+              <div className="my-1 border-t border-neutral-800" />
+              <button
+                onClick={() => {
+                  setMenu('closed')
+                  if (confirm(`「${doc.name}」を削除しますか？`)) deleteDocument(doc.id)
+                }}
+                className="w-full text-left px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10 transition"
+              >
+                削除
+              </button>
+            </div>
+          )}
+          {menu === 'folders' && (
+            <div className="absolute right-0 top-6 min-w-[170px] max-h-[50vh] overflow-auto scroll-thin bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl py-1 text-left">
+              <button
+                onClick={() => setMenu('main')}
+                className="w-full text-left px-3 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-800 transition flex items-center gap-1"
+              >
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" className="rotate-180 opacity-60">
+                  <path d="M3 1l3.5 3.5L3 8z" />
+                </svg>
+                戻る
+              </button>
+              <div className="my-1 border-t border-neutral-800" />
+              <button
+                onClick={() => {
+                  setMenu('closed')
+                  moveDocument(doc.id, null)
+                }}
+                className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-300 hover:bg-neutral-800 transition"
+              >
+                すべて（ルート）
+              </button>
+              {sortedFolders.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    setMenu('closed')
+                    moveDocument(doc.id, f.id)
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-[12px] text-neutral-300 hover:bg-neutral-800 transition truncate"
+                >
+                  {f.name}
+                </button>
+              ))}
+              {sortedFolders.length === 0 && (
+                <div className="px-3 py-2 text-[11px] text-neutral-600">フォルダがありません</div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="aspect-[3/4] bg-neutral-800/50 flex items-center justify-center">
           {doc.thumbDataUrl ? (

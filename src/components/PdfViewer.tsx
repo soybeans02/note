@@ -43,6 +43,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const noteContentRef = useRef<Map<string, string>>(new Map())
+  const contentRef = useRef<HTMLDivElement>(null)
 
   const pdfPages = pdf?.numPages ?? doc.pageCount
   const notePages = useNotePages(doc.id)
@@ -85,6 +86,19 @@ export default function PdfViewer({ doc, onClose }: Props) {
       }
       setPdf(loaded)
       setPage(1)
+      // Fit the first page to the container width so the document opens at a
+      // readable size on any screen (user can still zoom manually after).
+      try {
+        const p1 = await loaded.getPage(1)
+        const vp = p1.getViewport({ scale: 1 })
+        const containerW = contentRef.current?.clientWidth ?? window.innerWidth
+        const fit = (containerW - 48) / vp.width
+        if (alive && Number.isFinite(fit)) {
+          setZoom(Math.max(0.4, Math.min(2.5, Math.round(fit * 20) / 20)))
+        }
+      } catch {
+        /* keep default zoom */
+      }
     })()
     return () => {
       alive = false
@@ -347,8 +361,22 @@ export default function PdfViewer({ doc, onClose }: Props) {
             <path d="M8 2L4 6l4 4" />
           </svg>
         </button>
-        <span className="text-neutral-400 tabular-nums text-xs min-w-[60px] text-center">
-          {pageLabel} / {total}
+        <span className="text-neutral-400 tabular-nums text-xs flex items-center gap-1">
+          <input
+            type="number"
+            min={1}
+            max={total}
+            value={pageLabel}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (Number.isFinite(v)) setPage(Math.max(1, Math.min(total, v)))
+            }}
+            onFocus={(e) => e.target.select()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="w-10 h-6 text-center text-xs bg-neutral-900 text-neutral-200 rounded border border-neutral-800 outline-none focus:border-neutral-600 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            title="ページ番号を入力してジャンプ"
+          />
+          <span>/ {total}</span>
         </span>
         <button
           onClick={() => setPage((p) => Math.min(total, p + 1))}
@@ -549,6 +577,7 @@ export default function PdfViewer({ doc, onClose }: Props) {
 
       {/* Content area */}
       <div
+        ref={contentRef}
         className="flex-1 overflow-auto scroll-thin flex items-start justify-center p-3 md:p-6 relative"
         style={{
           overscrollBehavior: 'none',

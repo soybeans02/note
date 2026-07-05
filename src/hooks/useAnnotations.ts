@@ -75,6 +75,7 @@ export async function traceEraseAt(
         points: seg,
         color: stroke.color,
         width: stroke.width,
+        tool: stroke.tool,
       })
     }
   }

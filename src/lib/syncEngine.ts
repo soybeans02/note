@@ -98,8 +98,12 @@ const ALL_TABLES: TombstoneTable[] = [
 ]
 
 // ─── Tombstone hooks ──────────────────────────────────────────────────────
-// On any row delete, drop a tombstone in the same transaction so the
-// deletion can propagate.
+// On any row delete, record a tombstone so the deletion can propagate.
+//
+// IMPORTANT: the tombstone is written AFTER the deleting transaction
+// completes, not inside it. Most delete call sites open transactions that
+// don't include the `tombstones` table, and `trans.table('tombstones')`
+// would throw NotFoundError and abort the whole delete.
 
 let hooksAttached = false
 
@@ -111,12 +115,18 @@ function attachTombstoneHooks() {
     table.hook('deleting', function (primKey, _obj, trans) {
       // Skip if the deletion is itself part of a tombstone-driven cleanup.
       if ((trans as unknown as { _syncSilent?: boolean })._syncSilent) return
-      trans.table('tombstones').put({
-        id: `${name}:${primKey}`,
-        table: name,
-        rowId: primKey as string,
-        deletedAt: Date.now(),
-      } satisfies Tombstone)
+      trans.on('complete', () => {
+        db.tombstones
+          .put({
+            id: `${name}:${primKey}`,
+            table: name,
+            rowId: primKey as string,
+            deletedAt: Date.now(),
+          } satisfies Tombstone)
+          .catch(() => {
+            /* best-effort — worst case the delete doesn't propagate */
+          })
+      })
     })
   }
   for (const name of ALL_TABLES) wire(name)
@@ -128,8 +138,39 @@ let pushTimer: ReturnType<typeof setTimeout> | null = null
 let pushInFlight = false
 let pushAgain = false
 
+// After a credentials/permissions failure, automatic sync (focus pulls,
+// debounced pushes) is paused so the console isn't flooded with 403s.
+// Clicking the sync badge (syncNow) retries and clears the pause.
+let authFailed = false
+
+function isAuthError(err: unknown): boolean {
+  const name = (err as { name?: string })?.name ?? ''
+  const msg = (err as { message?: string })?.message ?? ''
+  const status = (err as { $metadata?: { httpStatusCode?: number } })?.$metadata
+    ?.httpStatusCode
+  return (
+    status === 403 ||
+    /InvalidAccessKeyId|SignatureDoesNotMatch|AccessDenied|ExpiredToken|CredentialsError/i.test(
+      `${name} ${msg}`,
+    )
+  )
+}
+
+function recordSyncError(err: unknown) {
+  if (isAuthError(err)) {
+    authFailed = true
+    setState({
+      status: 'error',
+      lastError:
+        'AWSの認証に失敗（キー設定を確認）。バッジをクリックで再試行',
+    })
+  } else {
+    setState({ status: 'error', lastError: (err as Error).message })
+  }
+}
+
 function schedulePush(delayMs = 2500) {
-  if (!isS3Configured()) return
+  if (!isS3Configured() || authFailed) return
   if (pushTimer) clearTimeout(pushTimer)
   pushTimer = setTimeout(() => {
     pushTimer = null
@@ -285,7 +326,7 @@ async function doPush() {
     setState({ status: 'idle', lastSyncedAt: Date.now() })
   } catch (err) {
     console.error('Push failed', err)
-    setState({ status: 'error', lastError: (err as Error).message })
+    recordSyncError(err)
   } finally {
     pushInFlight = false
     if (pushAgain) {
@@ -330,6 +371,8 @@ async function syncBlobs() {
       setState({ pendingBlobs: pendingCount })
     } catch (err) {
       console.warn('Blob upload failed', item.key, err)
+      // Credentials problem — every remaining upload would fail the same way.
+      if (isAuthError(err)) throw err
     }
   }
 
@@ -393,14 +436,17 @@ async function doPull() {
     setState({ status: 'idle', lastSyncedAt: Date.now() })
   } catch (err) {
     console.error('Pull failed', err)
-    setState({ status: 'error', lastError: (err as Error).message })
+    recordSyncError(err)
   }
 }
 
 // ─── Manual sync ──────────────────────────────────────────────────────────
 
 export async function syncNow() {
+  // Manual retry clears the auth-failure pause.
+  authFailed = false
   await doPull()
+  if (authFailed) return // still failing — don't double the error spam
   await doPush()
 }
 
@@ -417,9 +463,9 @@ export async function initSync() {
   attachChangeHooks()
   await doPull()
   // Push any local-only state on first run (also picks up blob uploads).
-  await doPush()
-  // Refresh on focus.
+  if (!authFailed) await doPush()
+  // Refresh on focus (paused while credentials are known-bad).
   window.addEventListener('focus', () => {
-    void doPull()
+    if (!authFailed) void doPull()
   })
 }
