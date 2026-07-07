@@ -120,6 +120,116 @@ export default function PdfViewer({ doc, onClose }: Props) {
     }
   }, [doc.id])
 
+  // Refit the current page to the container width (zoom-% button).
+  const fitToWidth = useCallback(async () => {
+    if (!pdf || !isPdfPage) return
+    try {
+      const p = await pdf.getPage(currentPdfPageNum)
+      const vp = p.getViewport({ scale: 1 })
+      const containerW = contentRef.current?.clientWidth ?? window.innerWidth
+      const fit = (containerW - 48) / vp.width
+      if (Number.isFinite(fit)) {
+        setZoom(Math.max(0.4, Math.min(2.5, Math.round(fit * 20) / 20)))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [pdf, isPdfPage, currentPdfPageNum])
+
+  // ─── Pinch / ctrl-wheel zoom, anchored at the pointer ────────────────────
+  const zoomRef = useRef(zoom)
+  useEffect(() => {
+    zoomRef.current = zoom
+  }, [zoom])
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const applyZoomAt = (clientX: number, clientY: number, next: number) => {
+      const prev = zoomRef.current
+      const clamped = Math.max(0.4, Math.min(4, next))
+      if (Math.abs(clamped - prev) < 0.001) return
+      const rect = el.getBoundingClientRect()
+      const cx = clientX - rect.left
+      const cy = clientY - rect.top
+      const ratio = clamped / prev
+      // Keep the content point under the pointer stationary.
+      const newScrollLeft = (el.scrollLeft + cx) * ratio - cx
+      const newScrollTop = (el.scrollTop + cy) * ratio - cy
+      zoomRef.current = clamped
+      setZoom(clamped)
+      requestAnimationFrame(() => {
+        el.scrollLeft = newScrollLeft
+        el.scrollTop = newScrollTop
+      })
+    }
+
+    // Trackpad pinch on Chrome/Edge/Firefox arrives as ctrl+wheel;
+    // cmd+wheel is a common manual-zoom convention.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const factor = Math.exp(-e.deltaY * 0.01)
+      applyZoomAt(e.clientX, e.clientY, zoomRef.current * factor)
+    }
+
+    // Safari (macOS/iPadOS trackpad) fires proprietary gesture events.
+    let gestureBaseZoom = 1
+    const onGestureStart = (e: Event) => {
+      e.preventDefault()
+      gestureBaseZoom = zoomRef.current
+    }
+    const onGestureChange = (e: Event) => {
+      e.preventDefault()
+      const ge = e as Event & { scale?: number; clientX?: number; clientY?: number }
+      if (!ge.scale) return
+      const rect = el.getBoundingClientRect()
+      applyZoomAt(
+        ge.clientX ?? rect.left + rect.width / 2,
+        ge.clientY ?? rect.top + rect.height / 2,
+        gestureBaseZoom * ge.scale,
+      )
+    }
+
+    // iPad two-finger pinch (touch events).
+    let touchBaseDist = 0
+    let touchBaseZoom = 1
+    const dist = (t: TouchList) =>
+      Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        touchBaseDist = dist(e.touches)
+        touchBaseZoom = zoomRef.current
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || touchBaseDist === 0) return
+      e.preventDefault()
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2
+      applyZoomAt(midX, midY, touchBaseZoom * (dist(e.touches) / touchBaseDist))
+    }
+    const onTouchEnd = () => {
+      touchBaseDist = 0
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+    el.addEventListener('gesturestart', onGestureStart)
+    el.addEventListener('gesturechange', onGestureChange)
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', onWheel)
+      el.removeEventListener('gesturestart', onGestureStart)
+      el.removeEventListener('gesturechange', onGestureChange)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [])
+
   // Render PDF page
   useEffect(() => {
     if (!pdf || !canvasRef.current || !isPdfPage) return
@@ -540,9 +650,14 @@ export default function PdfViewer({ doc, onClose }: Props) {
             </svg>
           </button>
         </Tooltip>
-        <span className="text-neutral-600 tabular-nums w-10 text-center text-[11px]">
-          {Math.round(zoom * 100)}%
-        </span>
+        <Tooltip label="幅に合わせる" position="bottom">
+          <button
+            onClick={() => void fitToWidth()}
+            className="text-neutral-600 hover:text-neutral-300 tabular-nums w-10 text-center text-[11px] rounded-md hover:bg-neutral-800 py-1 transition"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+        </Tooltip>
         <Tooltip label="拡大" position="bottom">
           <button
             onClick={() => setZoom((z) => Math.min(4, z + 0.2))}

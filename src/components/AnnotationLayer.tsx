@@ -623,6 +623,41 @@ export default function AnnotationLayer({
                   boxSizing: 'border-box',
                 }}
               />
+              {/* Delete-while-editing — no need to switch to the eraser */}
+              <button
+                onMouseDown={(e) => {
+                  // Keep the textarea focused so blur-commit doesn't race us.
+                  e.preventDefault()
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  removeTextBox(docId, pageKey, tb.id)
+                  setEditingId(null)
+                  setEditingText('')
+                }}
+                title="このテキストを削除"
+                style={{
+                  position: 'absolute',
+                  top: -12,
+                  right: -12,
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  color: 'white',
+                  border: '2px solid white',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <path d="M2.5 3.5h7M5 3.5V2.5h2v1M3.5 3.5l.5 6a1 1 0 001 1h2a1 1 0 001-1l.5-6" />
+                </svg>
+              </button>
             </div>
           )
         }
