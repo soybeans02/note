@@ -423,7 +423,9 @@ export default function AnnotationLayer({
 
   // Drag move/resize handlers (attached to window)
   useEffect(() => {
-    const DRAG_THRESHOLD = 3
+    // Generous threshold: trackpad taps and touch often wobble a few px, and
+    // crossing it both nudges the box AND suppresses the tap-to-edit click.
+    const DRAG_THRESHOLD = 6
     const onMove = (e: MouseEvent) => {
       const drag = dragRef.current
       if (!drag) return
@@ -445,7 +447,15 @@ export default function AnnotationLayer({
       }
     }
     const onUp = () => {
-      if (dragRef.current?.moved) suppressClickRef.current = true
+      if (dragRef.current?.moved) {
+        suppressClickRef.current = true
+        // The browser fires the click right after mouseup; clear afterwards so
+        // a drag that ends OUTSIDE the box (whose click lands elsewhere) can't
+        // leave the flag armed and swallow the user's next tap.
+        setTimeout(() => {
+          suppressClickRef.current = false
+        }, 0)
+      }
       dragRef.current = null
     }
     window.addEventListener('mousemove', onMove)
@@ -490,13 +500,16 @@ export default function AnnotationLayer({
     ta.style.height = ta.scrollHeight + 'px'
   }, [editingText, editingId, textBoxes])
 
-  // Click outside to deselect/commit (window-level)
+  // Click outside to deselect/commit (window-level). The drawing toolbar is
+  // NOT "outside": clicking a color/size control must keep the editor open,
+  // otherwise the style change has nothing to apply to.
   useEffect(() => {
     if (!selectedId && !editingId) return
     const onMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       if (target.closest('[data-textbox]')) return
       if (target.closest('[data-text-overlay]')) return
+      if (target.closest('[data-drawing-toolbar]')) return
       if (editingId) commitTextEdit(editingId, editingText)
       else if (selectedId) setSelectedId(null)
     }
@@ -575,7 +588,14 @@ export default function AnnotationLayer({
                 autoFocus
                 value={editingText}
                 onChange={(e) => setEditingText(e.target.value)}
-                onBlur={() => commitTextEdit(tb.id, editingText)}
+                onBlur={(e) => {
+                  // Focus moving into the drawing toolbar (font-size input,
+                  // color dots on browsers that focus buttons) must not end
+                  // the edit — the user is restyling this very box.
+                  const to = e.relatedTarget as HTMLElement | null
+                  if (to && to.closest('[data-drawing-toolbar]')) return
+                  commitTextEdit(tb.id, editingText)
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && e.key === 'Enter')) {
                     e.preventDefault()

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import Tooltip from './Tooltip'
 
 export type DrawTool =
@@ -82,8 +83,28 @@ export default function DrawingToolbar({
   const showTextOptions = tool === 'text' || !!editingText
   const showPen = tool === 'pen' && !editingText
   const showHighlighter = tool === 'highlighter' && !editingText
+
+  // Draft for the font-size field. Clamping on every keystroke made typing
+  // "20" impossible: "2" clamped to 8, then "80" clamped to 72. Valid
+  // in-range values apply live; out-of-range input settles on blur/Enter.
+  const [fontDraft, setFontDraft] = useState(String(fontSize))
+  useEffect(() => {
+    setFontDraft(String(fontSize))
+  }, [fontSize])
+  const commitFontDraft = () => {
+    const v = parseInt(fontDraft, 10)
+    const next = Number.isFinite(v)
+      ? Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, v))
+      : fontSize
+    onFontSizeChange(next)
+    setFontDraft(String(next))
+  }
+
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 max-w-[calc(100vw-2rem)]">
+    <div
+      data-drawing-toolbar
+      className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-20 max-w-[calc(100vw-2rem)]"
+    >
       {/* Sub-options bar (color/width/text settings) */}
       {(showPen || showHighlighter || showTextOptions) && (
         <div className="flex items-center gap-1 bg-neutral-900/95 backdrop-blur-md border border-neutral-800 rounded-xl px-2 py-1.5 shadow-2xl overflow-x-auto scroll-thin">
@@ -183,15 +204,24 @@ export default function DrawingToolbar({
                 </button>
                 <input
                   type="number"
-                  value={fontSize}
+                  value={fontDraft}
                   min={FONT_SIZE_MIN}
                   max={FONT_SIZE_MAX}
                   onChange={(e) => {
-                    const v = parseInt(e.target.value)
-                    if (!isNaN(v))
-                      onFontSizeChange(Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, v)))
+                    setFontDraft(e.target.value)
+                    const v = parseInt(e.target.value, 10)
+                    // Apply live only while the value is already in range; a
+                    // partial entry like "2" (heading for "20") stays a draft.
+                    if (Number.isFinite(v) && v >= FONT_SIZE_MIN && v <= FONT_SIZE_MAX) {
+                      onFontSizeChange(v)
+                    }
                   }}
-                  onKeyDown={(e) => e.stopPropagation()}
+                  onBlur={commitFontDraft}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation()
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  }}
                   className="w-9 h-6 text-center text-[11px] bg-neutral-800 text-neutral-200 rounded border border-neutral-700 outline-none focus:border-neutral-500 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <span className="text-[9px] text-neutral-600 mr-0.5">px</span>
